@@ -1,0 +1,19 @@
+{
+  "name": "wind-planner",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/web", "apps/api"],
+  "scripts": {
+    "dev": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web && npm run build -w apps/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev:api": "npm run dev -w apps/api",
+    "test:e2e": "playwright test",
+    "test:integration": "node --test tests/api.integration.test.mjs",
+    "test:public-db": "node --test tests/public-database.test.mjs",
+    "test:public-ui": "playwright test -c playwright.public.config.ts"
+  },
+  "devDependencies": { "@playwright/test": "^1.56.1" },
+  "overrides": { "multer": "^2.5.0", "js-yaml": "^5.5.0", "@azure/msal-node": "^7.1.2" }
+}

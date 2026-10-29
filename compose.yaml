@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: windplanner
+      POSTGRES_USER: windplanner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U windplanner -d windplanner"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    environment:
+      AZURITE_ACCOUNTS: windplanner:d2luZC1wbGFubmVyLWxvY2FsLW9ubHktZGV2ZWxvcG1lbnQta2V5
+    command: azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+    ports: ["127.0.0.1:10000:10000"]
+    volumes: ["blob-data:/data"]
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: development
+      AUTH_MODE: demo
+      SEED_DEMO: "true"
+      DATABASE_URL: postgresql://windplanner:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/windplanner
+      WEB_URL: http://localhost:3000
+      WORKER_ENABLED: "false"
+      AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=windplanner;AccountKey=d2luZC1wbGFubmVyLWxvY2FsLW9ubHktZGV2ZWxvcG1lbnQta2V5;BlobEndpoint=http://azurite:10000/windplanner;
+    command: ["sh", "-c", "cd apps/api && node dist/infrastructure/migrate.js && node dist/infrastructure/init-storage.js && node dist/main.js"]
+    ports: ["127.0.0.1:4000:4000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      api:
+        condition: service_healthy
+volumes:
+  postgres-data:
+  blob-data:

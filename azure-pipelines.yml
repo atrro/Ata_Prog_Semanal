@@ -1,0 +1,110 @@
+trigger:
+  branches:
+    include: [main]
+pr:
+  branches:
+    include: [main]
+
+variables:
+  - group: wind-planner-deploy
+  - name: imageTag
+    value: $(Build.BuildId)
+
+stages:
+  - stage: Validate
+    jobs:
+      - job: Quality
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: 24.x
+          - script: npm ci
+            displayName: Install locked dependencies
+          - script: npm run typecheck && npm test && npm run build
+            displayName: Types, domain tests and production builds
+          - script: npm audit --omit=dev --audit-level=high
+            displayName: Dependency security gate
+          - script: npx playwright install --with-deps chromium
+            displayName: Install browser
+          - script: npm run test:e2e
+            displayName: Desktop and mobile journeys
+          - script: docker compose up -d --build --wait api
+            displayName: Start integration environment
+          - script: docker compose exec -T api node -e "fetch('http://localhost:4000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)})" && npm run test:integration
+            displayName: Database, audit and Blob integration
+          - script: docker compose down
+            condition: always()
+            displayName: Stop integration environment
+          - task: PublishPipelineArtifact@1
+            condition: failed()
+            inputs:
+              targetPath: test-results
+              artifact: browser-results
+  - stage: Images
+    dependsOn: Validate
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: BuildImages
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: Docker@2
+            inputs:
+              containerRegistry: $(acrServiceConnection)
+              repository: windplanner-web
+              command: buildAndPush
+              Dockerfile: apps/web/Dockerfile
+              buildContext: .
+              tags: $(imageTag)
+          - task: Docker@2
+            inputs:
+              containerRegistry: $(acrServiceConnection)
+              repository: windplanner-api
+              command: buildAndPush
+              Dockerfile: apps/api/Dockerfile
+              buildContext: .
+              tags: $(imageTag)
+  - stage: Homologation
+    dependsOn: Images
+    jobs:
+      - deployment: DeployHml
+        environment: wind-planner-hml
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebAppContainer@1
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appName: $(hmlApiApp)
+                    containers: $(registryHost)/windplanner-api:$(imageTag)
+                - task: AzureWebAppContainer@1
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appName: $(hmlWebApp)
+                    containers: $(registryHost)/windplanner-web:$(imageTag)
+  - stage: Production
+    dependsOn: Homologation
+    jobs:
+      - deployment: DeployPrd
+        environment: wind-planner-prd
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebAppContainer@1
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appName: $(prdApiApp)
+                    containers: $(registryHost)/windplanner-api:$(imageTag)
+                - task: AzureWebAppContainer@1
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appName: $(prdWebApp)
+                    containers: $(registryHost)/windplanner-web:$(imageTag)
