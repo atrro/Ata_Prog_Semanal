@@ -1,6 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
 import { minutesSeed, parksSeed } from "../../apps/web/src/lib/domain";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("wind-planner-access-v1", "unlocked"));
+});
+
 async function publicCloud(page: Page) {
   await page.route("https://windplanner-test.supabase.co/**", async route => {
     if (route.request().url().includes("/rest/v1/wp_workspace")) await route.fulfill({ json: { data: { minutes: minutesSeed, parks: parksSeed }, revision: 3 } });
@@ -72,6 +76,7 @@ test("responsável autorizado publica e outro navegador recebe os mesmos dados",
   const visitor = await browser.newContext();
   try {
     const publicPage = await visitor.newPage(); await mock(publicPage);
+    await publicPage.addInitScript(() => sessionStorage.setItem("wind-planner-access-v1", "unlocked"));
     await publicPage.goto("http://127.0.0.1:3100/Ata_Prog_Semanal/");
     await expect(publicPage.getByText(/Dados compartilhados na nuvem · revisão 4/)).toBeVisible();
     if (await publicPage.getByRole("button", { name: "Abrir menu", exact: true }).isVisible()) await publicPage.getByRole("button", { name: "Abrir menu", exact: true }).click();

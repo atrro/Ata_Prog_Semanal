@@ -16,6 +16,18 @@ Visitantes não criam conta nem fazem login. Só o responsável precisa configur
 e autenticar-se para publicar alterações. Não há servidor pago ou container Azure obrigatório nesse modo.
 Custos, limites e eventual pausa por inatividade dependem do plano escolhido; não existe promessa de gratuidade ilimitada.
 
+## Tela de Entrada
+
+O site agora apresenta uma tela de senha compartilhada antes do workspace, sem cadastro individual.
+A sessão dura na aba atual; o botão Sair retorna à tela de entrada. O acesso administrativo Supabase
+continua separado: conhecer a senha da tela não permite alterar registros na nuvem.
+
+**Limite de segurança:** a validação ocorre no navegador. GitHub Pages distribui HTML e JavaScript
+públicos; a tela não implementa autenticação de servidor e pode ser contornada por um usuário técnico.
+Não protege URLs de arquivos, a API pública do Supabase ou dados contra acesso direto.
+Para proteger conteúdo confidencial, é necessário hospedar com autenticação no servidor e restringir
+as políticas de leitura no banco. Não use esta senha como credencial de conta corporativa.
+
 ## Configuração Inicial Pelo Responsável
 
 1. Acesse https://supabase.com/dashboard e crie um projeto, usando sua conta GitHub se preferir.

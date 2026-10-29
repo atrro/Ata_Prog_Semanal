@@ -1,6 +1,11 @@
 import { test, expect } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("wind-planner-access-v1", "unlocked"));
+});
+
 async function navigate(page: import("@playwright/test").Page, name: string) {
+  await expect(page.locator(".topbar")).toBeVisible();
   if (await page.getByRole("button", { name: "Abrir menu", exact: true }).isVisible()) await page.getByRole("button", { name: "Abrir menu", exact: true }).click();
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name, exact: false }).click();
 }

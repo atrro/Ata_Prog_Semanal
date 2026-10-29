@@ -1,2 +1,2 @@
-import { Workspace } from "@/components/workspace";
-export default function Page() { return <Workspace />; }
+import { AccessGate } from "@/components/access-gate";
+export default function Page() { return <AccessGate />; }

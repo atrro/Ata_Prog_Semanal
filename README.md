@@ -9,7 +9,8 @@ Interface em português, responsiva, com identidade visual inspirada na Vestas.
 
 Endereço após ativar o GitHub Pages: **https://atrro.github.io/Ata_Prog_Semanal/**.
 
-Visitantes consultam sem conta; somente o responsável autenticado pode publicar alterações.
+Visitantes usam uma tela de senha compartilhada, sem criar conta; somente o responsável autenticado pode publicar alterações.
+No GitHub Pages essa tela é uma barreira visual, não autenticação segura de servidor.
 O GitHub Pages hospeda a interface e a integração Supabase armazena os dados compartilhados.
 O responsável precisa configurar o projeto Supabase e as duas variáveis públicas uma única vez.
 Até isso ocorrer, o site informa que a nuvem não está configurada e não publica dados fictícios ou locais.

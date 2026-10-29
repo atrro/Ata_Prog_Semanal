@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { matchesAccessPassword } from "./access";
 import { canSend, checklistLabels, minuteSchema, minutesSeed, nextVersion, safeUrl } from "./domain";
 
 test("envio exige checklist completo, participantes e conteúdo", () => {
@@ -22,4 +23,11 @@ test("links rejeitam protocolos executáveis", () => {
 test("campos obrigatórios e semana são validados", () => {
   assert.equal(minuteSchema.safeParse({ ...minutesSeed[0], week: 54 }).success, false);
   assert.equal(minuteSchema.safeParse(minutesSeed[0]).success, true);
+});
+
+test("acesso aceita somente a senha exata e diferencia maiúsculas", async () => {
+  assert.equal(await matchesAccessPassword("Vestasplanejamento1"), true);
+  assert.equal(await matchesAccessPassword("vestasplanejamento1"), false);
+  assert.equal(await matchesAccessPassword("Vestasplanejamento1 "), false);
+  assert.equal(await matchesAccessPassword(""), false);
 });
