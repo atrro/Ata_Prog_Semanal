@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { matchesAccessPassword } from "./access";
 import { canSend, checklistLabels, minuteSchema, minutesSeed, nextVersion, safeUrl } from "./domain";
 
 test("envio exige checklist completo, participantes e conteúdo", () => {
@@ -23,3 +24,13 @@ test("campos obrigatórios e semana são validados", () => {
   assert.equal(minuteSchema.safeParse({ ...minutesSeed[0], week: 54 }).success, false);
   assert.equal(minuteSchema.safeParse(minutesSeed[0]).success, true);
 });
+<<<<<<< HEAD
+=======
+
+test("acesso aceita somente a senha exata e diferencia maiúsculas", async () => {
+  assert.equal(await matchesAccessPassword("[senha-removida]"), true);
+  assert.equal(await matchesAccessPassword("[senha-removida]"), false);
+  assert.equal(await matchesAccessPassword("[senha-removida] "), false);
+  assert.equal(await matchesAccessPassword(""), false);
+});
+>>>>>>> b16087c (Add password entry screen and fix GitHub Pages deployment)

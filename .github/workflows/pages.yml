@@ -31,6 +31,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w apps/web
+        env:
+          STATIC_EXPORT: "true"
+          NEXT_PUBLIC_BASE_PATH: /Ata_Prog_Semanal
+          NEXT_PUBLIC_ACCESS_MODE: public
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_TELEMETRY_DISABLED: "1"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

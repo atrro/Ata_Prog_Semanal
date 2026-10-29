@@ -7,11 +7,20 @@ Interface em português, responsiva, com identidade visual inspirada na Vestas.
 
 ## Site com Atas Privadas
 
+<<<<<<< HEAD
 **Acesso privado por senha:** a interface publicada no GitHub Pages pede a senha de acesso compartilhada.
 A senha é verificada no Supabase por funções RPC (hash bcrypt); somente quem a informa lê ou altera atas.
 O banco bloqueia leitura e escrita diretas por RLS e privilégios. O GitHub Pages hospeda a interface
 e o Supabase armazena os dados privados. O script de configuração pré-cria as 54 pastas de parques.
 O responsável precisa executar o script SQL, definir a senha e configurar as duas variáveis públicas uma única vez.
+=======
+Endereço após ativar o GitHub Pages: **https://atrro.github.io/Ata_Prog_Semanal/**.
+
+Visitantes usam uma tela de senha compartilhada, sem criar conta; somente o responsável autenticado pode publicar alterações.
+No GitHub Pages essa tela é uma barreira visual, não autenticação segura de servidor.
+O GitHub Pages hospeda a interface e a integração Supabase armazena os dados compartilhados.
+O responsável precisa configurar o projeto Supabase e as duas variáveis públicas uma única vez.
+>>>>>>> b16087c (Add password entry screen and fix GitHub Pages deployment)
 Até isso ocorrer, o site informa que a nuvem não está configurada e não publica dados fictícios ou locais.
 Veja o [passo a passo de publicação e nuvem](docs/PUBLICATION.md).
 

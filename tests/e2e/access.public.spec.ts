@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { test, expect, type Page } from "@playwright/test";
 import type { Minute, Park } from "../../apps/web/src/lib/domain";
 
+<<<<<<< HEAD
 const accessPassword = "senha-de-teste-e2e-123";
 const folderNames = [...readFileSync("database/supabase-public.sql", "utf8").split("unnest(ARRAY[")[1].split("]) WITH ORDINALITY")[0].matchAll(/'([^']+)'/g)].map(match => match[1]);
 const parks: Park[] = folderNames.map((name, index) => ({ id: `folder-${index}`, name, client: "", region: "", state: "", capacity: 0, manager: "", turbines: 0 }));
@@ -26,6 +27,17 @@ function cloudMock() {
       } else await route.fulfill({ status: 404, json: { message: "Not found" } });
     });
   };
+=======
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("wind-planner-access-v1", "unlocked"));
+});
+
+async function publicCloud(page: Page) {
+  await page.route("https://windplanner-test.supabase.co/**", async route => {
+    if (route.request().url().includes("/rest/v1/wp_workspace")) await route.fulfill({ json: { data: { minutes: minutesSeed, parks: parksSeed }, revision: 3 } });
+    else await route.fulfill({ status: 403, json: { message: "Not authorized" } });
+  });
+>>>>>>> b16087c (Add password entry screen and fix GitHub Pages deployment)
 }
 
 async function unlock(page: Page, password = accessPassword) {
@@ -80,6 +92,7 @@ test("senha correta libera as pastas, cria uma ata e a recupera em outra sessão
   await expect(page.getByText(/Atas privadas na nuvem · revisão 2/)).toBeVisible();
   const second = await browser.newContext();
   try {
+<<<<<<< HEAD
     const secondPage = await second.newPage(); await mock(secondPage);
     await secondPage.goto("http://127.0.0.1:3100/Ata_Prog_Semanal/");
     await unlock(secondPage);
@@ -137,3 +150,15 @@ test("falha de salvamento é explícita e preserva o rascunho para exportar", as
   await page.getByRole("button", { name: "Exportar", exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
 });
+=======
+    const publicPage = await visitor.newPage(); await mock(publicPage);
+    await publicPage.addInitScript(() => sessionStorage.setItem("wind-planner-access-v1", "unlocked"));
+    await publicPage.goto("http://127.0.0.1:3100/Ata_Prog_Semanal/");
+    await expect(publicPage.getByText(/Dados compartilhados na nuvem · revisão 4/)).toBeVisible();
+    if (await publicPage.getByRole("button", { name: "Abrir menu", exact: true }).isVisible()) await publicPage.getByRole("button", { name: "Abrir menu", exact: true }).click();
+    await publicPage.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: "Parques eólicos", exact: true }).click();
+    await expect(publicPage.getByRole("heading", { name: "Parque Publicado Teste", exact: true })).toBeVisible();
+    await expect(publicPage.getByRole("button", { name: "Novo parque", exact: true })).toHaveCount(0);
+  } finally { await visitor.close(); }
+});
+>>>>>>> b16087c (Add password entry screen and fix GitHub Pages deployment)
