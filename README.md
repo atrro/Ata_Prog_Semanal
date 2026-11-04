@@ -5,13 +5,20 @@
 Workspace de programação semanal de operação e manutenção de parques eólicos.
 Interface em português, responsiva, com identidade visual inspirada na Vestas.
 
-## Site Público
+## Site com Atas Privadas
+
+**Acesso compartilhado da empresa:** a implantação [Render](docs/RENDER.md) valida uma
+senha no servidor e salva dados no GitHub privado, sem banco de dados.
+O blueprint `render.yaml` prepara o serviço; a ativação exige autorização do responsável
+e configuração de dois segredos no Render. A equipe usa apenas o endereço do app e a senha.
+Esse modo substitui o acesso exclusivo por e-mail descrito abaixo.
 
 Endereço após ativar o GitHub Pages: **https://atrro.github.io/Ata_Prog_Semanal/**.
 
-Visitantes usam uma tela de senha compartilhada, sem criar conta; somente o responsável autenticado pode publicar alterações.
-No GitHub Pages essa tela é uma barreira visual, não autenticação segura de servidor.
-O GitHub Pages hospeda a interface e a integração Supabase armazena os dados compartilhados.
+Somente uma conta responsável autenticada por e-mail pode consultar, criar e alterar atas.
+O banco Supabase bloqueia leitura anônima e acesso de outras contas por RLS.
+O GitHub Pages hospeda a interface e a integração Supabase armazena os dados privados.
+O script de configuração pré-cria as 54 pastas de parques e impede múltiplos responsáveis.
 O responsável precisa configurar o projeto Supabase e as duas variáveis públicas uma única vez.
 Até isso ocorrer, o site informa que a nuvem não está configurada e não publica dados fictícios ou locais.
 Veja o [passo a passo de publicação e nuvem](docs/PUBLICATION.md).
@@ -29,7 +36,8 @@ Abra **http://localhost:3000**.
 
 Sem variáveis de nuvem, o frontend local usa dados fictícios e persiste alterações no navegador. Não insira dados confidenciais.
 Envio de e-mail e análise de riscos são explicitamente demonstrativos na interface.
-Os dados locais do frontend **não são sincronizados com a API NestJS**. O modo público usa Supabase separadamente.
+Os dados locais do frontend **não são sincronizados com a API NestJS**. O modo privado usa Supabase separadamente.
+O modo `company` usa servidor próprio e GitHub privado, também independente da API NestJS.
 
 ## Backend Local
 

@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const staticExport = process.env.STATIC_EXPORT === "true";
 const config: NextConfig = {
   output: staticExport ? "export" : "standalone",
+  outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
   trailingSlash: staticExport,
   images: { unoptimized: staticExport },

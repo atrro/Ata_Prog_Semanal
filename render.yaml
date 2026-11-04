@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: wind-planner
+    runtime: docker
+    plan: free
+    dockerfilePath: ./apps/web/Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: GITHUB_DATA_REPOSITORY
+        value: atrro/base_de_dados
+      - key: COMPANY_PASSWORD
+        sync: false
+      - key: GITHUB_DATA_TOKEN
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true

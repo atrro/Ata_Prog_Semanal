@@ -12,7 +12,9 @@
     "test:e2e": "playwright test",
     "test:integration": "node --test tests/api.integration.test.mjs",
     "test:public-db": "node --test tests/public-database.test.mjs",
-    "test:public-ui": "playwright test -c playwright.public.config.ts"
+    "test:public-ui": "playwright test -c playwright.public.config.ts",
+    "test:company-server": "node --test tests/company-server.test.mjs",
+    "test:company-ui": "playwright test -c playwright.company.config.ts"
   },
   "devDependencies": { "@playwright/test": "^1.56.1" },
   "overrides": { "multer": "^2.5.0", "js-yaml": "^5.5.0", "@azure/msal-node": "^7.1.2" }

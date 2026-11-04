@@ -11,7 +11,7 @@ import { Button } from "./ui/button";
 import { RichEditor } from "./rich-editor";
 import { canSend, checklistLabels, minuteSchema, minutesSeed, nextVersion, parksSeed, people, safeUrl, sectionLabels, stripHtml, type Attachment, type Minute, type MinuteFields, type Park, type Role, type Status } from "@/lib/domain";
 import { exportPdf } from "@/lib/pdf";
-import { useSharedWorkspace } from "@/lib/shared-workspace";
+import type { useSharedWorkspace } from "@/lib/shared-workspace";
 import { CloudAccess } from "./cloud-access";
 
 type View = "dashboard" | "minutes" | "parks" | "team" | "reports" | "integrations" | "settings";
@@ -29,8 +29,7 @@ function Avatar({ name, small = false }: { name: string; small?: boolean }) {
 }
 function Badge({ status }: { status: Status }) { return <span className={`badge ${status === "Enviada" ? "badge-green" : status === "Pendente" ? "badge-amber" : "badge-gray"}`}><span />{status}</span>; }
 
-export function Workspace({ onLock }: { onLock?: () => void } = {}) {
-  const shared = useSharedWorkspace();
+export function Workspace({ shared, onLock }: { shared: ReturnType<typeof useSharedWorkspace>; onLock?: () => void }) {
   const { minutes, setMinutes, parks, setParks, publicAccess } = shared;
   const [view, setView] = useState<View>("dashboard");
   const [ready, setReady] = useState(false);
@@ -58,6 +57,7 @@ export function Workspace({ onLock }: { onLock?: () => void } = {}) {
   const [toast, setToast] = useState("");
   const [demoRole, setRole] = useState<Role>("Administrador");
   const role: Role = publicAccess ? (shared.isAdmin && shared.ready && !shared.error ? "Administrador" : "Leitor") : demoRole;
+  const actor = publicAccess ? shared.email : "Ana Martins";
   const [help, setHelp] = useState(false);
   const [integration, setIntegration] = useState<string | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -80,13 +80,13 @@ export function Workspace({ onLock }: { onLock?: () => void } = {}) {
   const pending = scoped.filter(minute => minute.status === "Pendente").length;
   const drafts = scoped.filter(minute => minute.status === "Rascunho").length;
   const openNew = () => { setViewOnly(false); setEditor("new"); };
-  const saveMinute = (minute: Minute) => { setMinutes(previous => previous.some(item => item.id === minute.id) ? previous.map(item => item.id === minute.id ? minute : item) : [minute, ...previous]); setEditor(null); notify(publicAccess ? "Alteração registrada. Aguarde a confirmação de publicação no painel da nuvem." : "Ata salva. Histórico de versão atualizado."); };
-  const duplicate = (minute: Minute) => { const copy: Minute = { ...minute, id: crypto.randomUUID(), status: "Rascunho", version: 1, date: new Date().toISOString().slice(0, 10), sentAt: undefined, audit: [{ version: 1, actor: "Ana Martins", date: new Date().toISOString(), action: `Duplicada de ${minute.id}` }] }; setMinutes(previous => [copy, ...previous]); setViewOnly(false); setEditor(copy); };
+  const saveMinute = (minute: Minute) => { setMinutes(previous => previous.some(item => item.id === minute.id) ? previous.map(item => item.id === minute.id ? minute : item) : [minute, ...previous]); setEditor(null); notify(publicAccess ? "Alteração registrada. Aguarde a confirmação de salvamento no painel da nuvem." : "Ata salva. Histórico de versão atualizado."); };
+  const duplicate = (minute: Minute) => { const copy: Minute = { ...minute, id: crypto.randomUUID(), status: "Rascunho", version: 1, date: new Date().toISOString().slice(0, 10), sentAt: undefined, audit: [{ version: 1, actor, date: new Date().toISOString(), action: `Duplicada de ${minute.id}` }] }; setMinutes(previous => [copy, ...previous]); setViewOnly(false); setEditor(copy); };
   const requestEmail = (minute: Minute) => { if (!canSend(minute)) { notify("Complete os 13 itens do checklist, os participantes e o conteúdo antes de enviar."); setViewOnly(false); setEditor(minute); return; } setRecipients(""); setEmailError(""); setEmailMinute(minute); };
   const sendDemo = () => {
     const emails = recipients.split(/[;,]/).map(value => value.trim()).filter(Boolean);
     if (!emails.length || emails.some(value => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))) { setEmailError("Informe ao menos um e-mail válido, separado por vírgula."); return; }
-    if (emailMinute) { const updated = nextVersion({ ...emailMinute, status: "Enviada", sentAt: new Date().toISOString() }, "Ana Martins", `Envio simulado para ${emails.join(", ")}`); setMinutes(previous => previous.map(item => item.id === updated.id ? updated : item)); setEmailMinute(null); notify("Envio simulado registrado. Nenhum e-mail real foi enviado."); }
+    if (emailMinute) { const updated = nextVersion({ ...emailMinute, status: "Enviada", sentAt: new Date().toISOString() }, actor, `Envio simulado para ${emails.join(", ")}`); setMinutes(previous => previous.map(item => item.id === updated.id ? updated : item)); setEmailMinute(null); notify("Envio simulado registrado. Nenhum e-mail real foi enviado."); }
   };
   const table = (compact = false) => <div className="table-scroll"><table><thead><tr><th>PARQUE / ATA</th><th>SEMANA</th><th>DISPATCHER</th><th>DATA DA REUNIÃO</th><th>STATUS</th><th className="text-right">AÇÕES</th></tr></thead><tbody>{scoped.slice(compact ? 0 : page * 8, compact ? 5 : page * 8 + 8).map(minute => {
     const park = parks.find(item => item.id === minute.parkId);
@@ -141,17 +141,17 @@ export function Workspace({ onLock }: { onLock?: () => void } = {}) {
       {view === "dashboard" && <p className="demo-footnote">* Variações ilustrativas do protótipo. Totais e gráficos calculados sobre os registros locais.</p>}
       </motion.div></AnimatePresence>
     </main></div>
-    {editor && <MinuteEditor minute={editor} parks={parks} readOnly={viewOnly || !editable} onClose={() => setEditor(null)} onSave={saveMinute} onSend={minute => { saveMinute(minute); requestEmail(minute); }} notify={notify} />}
+    {editor && <MinuteEditor minute={editor} parks={parks} initialParkId={parkFilter} actor={actor} readOnly={viewOnly || !editable} onClose={() => setEditor(null)} onSave={saveMinute} onSend={minute => { saveMinute(minute); requestEmail(minute); }} notify={notify} />}
     {parkEditor && <ParkEditor park={parkEditor} onClose={() => setParkEditor(null)} onSave={park => { setParks(previous => previous.some(item => item.id === park.id) ? previous.map(item => item.id === park.id ? park : item) : [...previous, park]); setParkEditor(null); notify("Parque salvo com sucesso."); }} />}
     <Modal open={!!emailMinute} onClose={() => setEmailMinute(null)} title="Pré-visualização do envio" subtitle="Demonstração · Nenhuma mensagem real será enviada.">{emailMinute && <div className="email-preview"><label>Destinatários<input type="text" placeholder="equipe@empresa.com, gestor@empresa.com" value={recipients} onChange={event => setRecipients(event.target.value)} />{emailError && <span className="field-error">{emailError}</span>}</label><label>Assunto<input readOnly value={`ATA DE PROGRAMAÇÃO SEMANAL - ${parks.find(park => park.id === emailMinute.parkId)?.name} - SEMANA ${emailMinute.week}`} /></label><div className="email-body"><p>Prezados,</p><p>Segue a ata da programação semanal do parque <strong>{parks.find(park => park.id === emailMinute.parkId)?.name}</strong>.</p><p>Favor verificar os pontos destacados e as ações pendentes.</p><p>Atenciosamente,<br /><strong>{emailMinute.dispatcher}</strong></p>{emailMinute.links.map(link => <a key={link.url} href={link.url} target="_blank" rel="noreferrer">{link.title}<ExternalLink size={12} /></a>)}</div><div className="email-attachment"><FileText size={20} /><span>Ata_S{emailMinute.week}.pdf<small>PDF corporativo + {emailMinute.attachments.length} anexo(s)</small></span><Button variant="ghost" size="icon" title="Gerar PDF" onClick={() => void exportPdf(emailMinute, parks.find(park => park.id === emailMinute.parkId))}><Download size={17} /></Button></div><div className="modal-footer"><Button variant="outline" onClick={() => setEmailMinute(null)}>Cancelar</Button><Button onClick={sendDemo}><Send size={16} />Simular envio</Button></div></div>}</Modal>
-    <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title={deleteTarget?.kind === "park" ? "Excluir parque?" : "Excluir ata?"} subtitle="Esta ação não pode ser desfeita no ambiente de demonstração."><div className="modal-body"><p>{deleteTarget?.kind === "park" ? "Parques com atas vinculadas não podem ser excluídos. Preserve o histórico da operação." : "O registro e seus anexos serão removidos deste navegador."}</p></div><div className="modal-footer"><Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button><Button variant="danger" onClick={() => { if (!deleteTarget) return; if (deleteTarget.kind === "park") { if (minutes.some(minute => minute.parkId === deleteTarget.id)) { notify("Este parque possui atas vinculadas e não pode ser excluído."); setDeleteTarget(null); return; } setParks(previous => previous.filter(park => park.id !== deleteTarget.id)); } else { setMinutes(previous => previous.filter(minute => minute.id !== deleteTarget.id)); } setDeleteTarget(null); notify("Registro excluído."); }}><Trash2 size={15} />Excluir registro</Button></div></Modal>
+    <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title={deleteTarget?.kind === "park" ? "Excluir parque?" : "Excluir ata?"} subtitle={publicAccess ? "A exclusão será salva na nuvem; versões anteriores permanecem no histórico." : "Esta ação não pode ser desfeita no ambiente de demonstração."}><div className="modal-body"><p>{deleteTarget?.kind === "park" ? "Parques com atas vinculadas não podem ser excluídos. Preserve o histórico da operação." : publicAccess ? "O registro e seus anexos sairão da versão atual. Isso não apaga versões antigas do armazenamento." : "O registro e seus anexos serão removidos deste navegador."}</p></div><div className="modal-footer"><Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button><Button variant="danger" onClick={() => { if (!deleteTarget) return; if (deleteTarget.kind === "park") { if (minutes.some(minute => minute.parkId === deleteTarget.id)) { notify("Este parque possui atas vinculadas e não pode ser excluído."); setDeleteTarget(null); return; } setParks(previous => previous.filter(park => park.id !== deleteTarget.id)); } else { setMinutes(previous => previous.filter(minute => minute.id !== deleteTarget.id)); } setDeleteTarget(null); notify("Registro excluído."); }}><Trash2 size={15} />Excluir registro</Button></div></Modal>
     <Modal open={help} onClose={() => setHelp(false)} title="Central de ajuda" subtitle="Wind Planner · One Standard. One Process. One Voice."><div className="help-content"><h3>Seu fluxo de programação</h3><ol><li>Cadastre os parques e responsáveis em Parques eólicos.</li><li>Crie uma ata com semana, participantes e conteúdo.</li><li>Revise os 13 itens do checklist e adicione anexos e links.</li><li>Salve uma versão ou abra a pré-visualização de envio.</li><li>Consulte o histórico, duplique atas e exporte o PDF.</li></ol><div className="notice"><CircleHelp size={20} /><p>Este protótipo usa dados fictícios e armazenamento local. O backend, a infraestrutura e os manuais de implantação estão incluídos no repositório. Integrações dependem de configuração corporativa.</p></div></div></Modal>
     <Modal open={!!integration} onClose={() => setIntegration(null)} title={`Configurar ${integration ?? "integração"}`} subtitle="Configuração realizada no backend e no Azure Key Vault."><div className="help-content"><p>Para habilitar esta integração no ambiente corporativo:</p><ol><li>Registre a aplicação no Microsoft Entra ID e conceda somente as permissões necessárias.</li><li>Configure as variáveis e segredos indicados no manual técnico.</li><li>Implante a API e valide as permissões no ambiente de homologação.</li></ol><div className="notice"><ShieldCheck size={20} /><p>Não informe tokens ou senhas no navegador. Nenhuma integração será marcada como conectada sem validação do serviço.</p></div><Button variant="outline" onClick={() => { setIntegration(null); navigate("settings"); }}><Settings2 size={16} />Ver configurações</Button></div></Modal>
     <AnimatePresence>{toast && <motion.div className="toast" role="status" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}><CheckCircle2 size={19} /><span>{toast}</span><button onClick={() => setToast("")} aria-label="Fechar aviso"><X size={15} /></button></motion.div>}</AnimatePresence>
   </div>;
 }
 
-function MinuteEditor({ minute, parks, readOnly, onClose, onSave, onSend, notify }: { minute: Minute | "new"; parks: Park[]; readOnly: boolean; onClose: () => void; onSave: (minute: Minute) => void; onSend: (minute: Minute) => void; notify: (message: string) => void }) {
+function MinuteEditor({ minute, parks, initialParkId, actor, readOnly, onClose, onSave, onSend, notify }: { minute: Minute | "new"; parks: Park[]; initialParkId: string; actor: string; readOnly: boolean; onClose: () => void; onSave: (minute: Minute) => void; onSend: (minute: Minute) => void; notify: (message: string) => void }) {
   const isNew = minute === "new";
   const initial = isNew ? null : minute;
   const [tab, setTab] = useState("information");
@@ -167,10 +167,10 @@ function MinuteEditor({ minute, parks, readOnly, onClose, onSave, onSend, notify
   const [preview, setPreview] = useState<Attachment | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const { register, handleSubmit, formState: { errors } } = useForm<MinuteFields>({ resolver: zodResolver(minuteSchema), defaultValues: initial ?? { parkId: parks[0]?.id ?? "", week: 44, date: "2026-10-29", territory: "Nordeste", dispatcher: "Ana Martins", participants: "" } });
+  const { register, handleSubmit, formState: { errors } } = useForm<MinuteFields>({ resolver: zodResolver(minuteSchema), defaultValues: initial ?? { parkId: parks.find(park => park.id === initialParkId)?.id ?? parks[0]?.id ?? "", week: 44, date: "2026-10-29", territory: "Nordeste", dispatcher: actor, participants: "" } });
   const build = (fields: MinuteFields, status: Status): Minute => {
     const base: Minute = { ...fields, id: initial?.id ?? crypto.randomUUID(), checklist, sections, attachments, links, status, version: initial?.version ?? 0, audit: initial?.audit ?? [], sentAt: initial?.sentAt };
-    return nextVersion(base, "Ana Martins", initial ? "Conteúdo, checklist e anexos revisados" : "Ata criada");
+    return nextVersion(base, actor, initial ? "Conteúdo, checklist e anexos revisados" : "Ata criada");
   };
   const submit = (send: boolean) => handleSubmit(fields => { const result = build(fields, send ? "Pendente" : "Rascunho"); if (send && !canSend(result)) { notify("Conclua todos os itens do checklist e preencha o conteúdo."); setTab("checklist"); return; } if (send) onSend(result); else onSave(result); }, () => { setTab("information"); notify("Revise os campos obrigatórios da ata."); })();
   const upload = async (files: FileList | null) => {

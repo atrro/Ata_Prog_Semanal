@@ -5,8 +5,11 @@ import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, Wind } from "lucide-reac
 import { accessSessionKey, matchesAccessPassword } from "@/lib/access";
 import { Button } from "./ui/button";
 import { Workspace } from "./workspace";
+import { useSharedWorkspace } from "@/lib/shared-workspace";
+import { CloudAccess } from "./cloud-access";
 
 export function AccessGate() {
+  const workspace = useSharedWorkspace();
   const [unlocked, setUnlocked] = useState(false);
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
@@ -21,7 +24,20 @@ export function AccessGate() {
     try { sessionStorage.removeItem(accessSessionKey); } finally { setPassword(""); setError(""); setUnlocked(false); }
   };
 
-  if (unlocked) return <Workspace onLock={lock} />;
+  if (workspace.publicAccess) {
+    if (workspace.isAdmin && workspace.ready) return <Workspace shared={workspace} />;
+    return <main className="login-page">
+      <div className="login-background" />
+      <section className="login-panel" aria-labelledby="private-login-title">
+        <span className="login-icon"><LockKeyhole size={23} /></span>
+        <h1 id="private-login-title">Wind Planner</h1>
+        <p className="login-subtitle">{workspace.serverAccess ? "Acesso da empresa. Informe a senha compartilhada para consultar as pastas e criar atas na nuvem." : "Atas privadas. Entre com a única conta responsável para consultar suas pastas e criar uma nova ata."}</p>
+        <CloudAccess workspace={workspace} />
+      </section>
+    </main>;
+  }
+
+  if (unlocked) return <Workspace shared={workspace} onLock={lock} />;
 
   return <main className="login-page">
     <div className="login-background" />

@@ -2,6 +2,24 @@
 
 ## Acesso e Painel
 
+Na implantação Render, abra o endereço fornecido à empresa e informe a **Senha da empresa**.
+Todos que conhecem a senha podem consultar e alterar atas. Não é necessário login GitHub.
+Atas e anexos são salvos no repositório privado pelo servidor. Aguarde a confirmação da
+revisão; em conflito ou falha, exporte suas alterações antes de atualizar/sair.
+Use **Sair** ao terminar, principalmente em computadores compartilhados.
+Veja [Implantação Render](RENDER.md) para configuração e limites.
+
+No site publicado, entre pelo link enviado ao e-mail da única conta responsável.
+Depois de autenticar, **Nova ata** fica disponível no painel e em Atas semanais.
+As 54 pastas pré-criadas aparecem em **Parques eólicos**; selecione a pasta no campo
+**Parque eólico** da ata. **Consultar atas** filtra o histórico por pasta e a seleciona
+ao criar uma ata. Atas e anexos ficam privados na nuvem Supabase; aguarde a confirmação
+da revisão antes de sair. Outras contas e visitantes não têm acesso.
+Veja a configuração e os limites em [Publicação](PUBLICATION.md).
+
+As orientações sobre dados fictícios, perfis e armazenamento local abaixo se aplicam
+somente ao ambiente demonstrativo, sem variáveis Supabase.
+
 Abra http://localhost:3000. Ambiente demonstrativo com dados fictícios e usuário Ana Martins.
 Não há login corporativo ativo na interface. Dados ficam no navegador, sem sincronização com a API.
 Não utilize informações confidenciais.

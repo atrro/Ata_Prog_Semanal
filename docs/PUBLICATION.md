@@ -1,97 +1,110 @@
-# Publicação Sem Cadastro Para Visitantes
+# Publicação com Atas Privadas
 
-## Endereços
+Para acesso compartilhado da empresa por senha e armazenamento no GitHub privado,
+use a [implantação Render](RENDER.md), sem Supabase. As instruções abaixo são apenas
+para o modo anterior, de acesso exclusivo por e-mail.
 
-- Site: https://atrro.github.io/Ata_Prog_Semanal/
-- Código: https://github.com/atrro/Ata_Prog_Semanal
-- Publicação: https://github.com/atrro/Ata_Prog_Semanal/actions/workflows/pages.yml
+GitHub Pages hospeda somente a interface em `https://atrro.github.io/Ata_Prog_Semanal/`.
+Supabase armazena atas, anexos e pastas. **Somente uma conta responsável pode ler e alterar
+esses dados**, mediante autenticação por link de e-mail. Não existe consulta anônima.
+O modo local sem variáveis de nuvem continua demonstrativo e independente da API NestJS.
 
-Se o GitHub Pages ainda não estiver ativo, abra Settings > Pages no repositório e selecione
-**GitHub Actions** como Source. O token do Codespaces pode permitir push, mas não permitir ativar Pages;
-nesse caso, esta etapa precisa ser feita pelo proprietário na interface do GitHub.
-Depois, abra Actions > Publish Wind Planner > Run workflow.
+## Configuração do Supabase
 
-GitHub Pages hospeda o site gratuitamente conforme os limites do serviço. Supabase hospeda os dados.
-Visitantes não criam conta nem fazem login. Só o responsável precisa configurar o serviço uma vez
-e autenticar-se para publicar alterações. Não há servidor pago ou container Azure obrigatório nesse modo.
-Custos, limites e eventual pausa por inatividade dependem do plano escolhido; não existe promessa de gratuidade ilimitada.
-
-## Tela de Entrada
-
-O site agora apresenta uma tela de senha compartilhada antes do workspace, sem cadastro individual.
-A sessão dura na aba atual; o botão Sair retorna à tela de entrada. O acesso administrativo Supabase
-continua separado: conhecer a senha da tela não permite alterar registros na nuvem.
-
-**Limite de segurança:** a validação ocorre no navegador. GitHub Pages distribui HTML e JavaScript
-públicos; a tela não implementa autenticação de servidor e pode ser contornada por um usuário técnico.
-Não protege URLs de arquivos, a API pública do Supabase ou dados contra acesso direto.
-Para proteger conteúdo confidencial, é necessário hospedar com autenticação no servidor e restringir
-as políticas de leitura no banco. Não use esta senha como credencial de conta corporativa.
-
-## Configuração Inicial Pelo Responsável
-
-1. Acesse https://supabase.com/dashboard e crie um projeto, usando sua conta GitHub se preferir.
-2. No SQL Editor desse projeto, execute uma vez o conteúdo de `database/supabase-public.sql`.
-3. Em Authentication > Users, use Add user para cadastrar somente o e-mail do responsável.
-   Não habilite cadastro público. Copie o UUID desse usuário e execute no SQL Editor:
+1. Crie ou abra o projeto em https://supabase.com/dashboard.
+2. Em Authentication > Users, cadastre a conta responsável informada: `atrro@vestas.com`.
+   Desative novos cadastros e mantenha Email/Magic Link habilitado.
+3. Para configurar a única conta responsável, execute no SQL Editor:
 
 ```sql
-INSERT INTO public.wp_admins(user_id)
-VALUES ('UUID-DO-USUARIO-RESPONSAVEL')
-ON CONFLICT DO NOTHING;
+BEGIN;
+CREATE TABLE IF NOT EXISTS public.wp_admins (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
+);
+DO $$
+DECLARE responsible_id uuid;
+BEGIN
+  SELECT id INTO STRICT responsible_id FROM auth.users
+    WHERE lower(email)=lower('atrro@vestas.com');
+  DELETE FROM public.wp_admins;
+  INSERT INTO public.wp_admins(user_id) VALUES(responsible_id);
+END;
+$$;
+COMMIT;
 ```
 
-4. Em Authentication > URL Configuration, configure Site URL e Redirect URL exatamente como:
+O bloco falha e reverte a transação se a conta não existir ou não for única.
+Ele substitui autorizações anteriores; não exclui usuários nem atas.
+Não envie senhas, tokens ou chaves privadas ao assistente.
+
+4. Execute `database/supabase-public.sql` por completo. Apesar do nome legado, o script
+   configura **acesso privado**. Pode ser reaplicado em projetos que usavam leitura pública:
+   remove a política pública, revoga leitura anônima e restringe a leitura à conta responsável.
+   O índice `wp_single_admin` impede cadastrar uma segunda conta responsável, inclusive pelo
+   SQL Editor. Se já houver múltiplos responsáveis, execute o passo 3 primeiro.
+5. O mesmo script cria as **54 pastas** com os nomes fornecidos, preservando maiúsculas,
+   acentos e nomes completos. Não duplica pastas existentes com o mesmo nome nem remove atas.
+   Faça backup antes de atualizar um projeto existente e feche sessões de edição durante a migração.
+6. Em Authentication > URL Configuration, configure Site URL e Redirect URL como
    `https://atrro.github.io/Ata_Prog_Semanal/`.
-5. Em Authentication, mantenha Email/Magic Link habilitado e desative novos cadastros.
-   O SDK usa `shouldCreateUser: false`. Configure SMTP próprio se os limites de e-mail do plano exigirem.
-   O remetente embutido pode restringir destinatários aos membros da organização Supabase.
-6. No GitHub, abra Settings > Secrets and variables > Actions > **Variables** e cadastre:
+7. Configure SMTP se necessário. O remetente embutido pode limitar destinatários aos membros
+   da organização Supabase; custos e quotas dependem do plano.
+
+## Publicação da Interface
+
+Em Settings > Secrets and variables > Actions > **Variables**, cadastre:
 
 | Nome | Valor |
 |---|---|
-| NEXT_PUBLIC_SUPABASE_URL | Project URL do Supabase, HTTPS |
-| NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY | Publishable key, ou chave anon legada |
+| NEXT_PUBLIC_SUPABASE_URL | Project URL HTTPS do Supabase |
+| NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY | Publishable key ou chave anon legada |
 
-Esses dois valores são públicos por projeto e são incluídos no JavaScript do site.
-**Nunca use secret key, service_role, senha do banco ou access token nesse lugar.**
-A segurança dos dados depende de RLS, privilégios e função autorizada, não de esconder a publishable key.
+Os dois valores são públicos e incluídos no JavaScript. **Nunca use secret key, service_role,
+senha do banco ou access token.** A proteção dos dados é feita por RLS e privilégios no banco,
+não por esconder a URL ou a chave pública.
 
-7. Abra Actions > Publish Wind Planner > Run workflow e aguarde os jobs build/deploy.
-8. No site, clique em Responsável, informe o e-mail cadastrado e abra o link recebido.
-9. Cadastre os parques e atas que podem ser divulgados. Aguarde o painel confirmar a revisão na nuvem.
-10. Abra o mesmo site em janela anônima: os dados devem aparecer sem login e sem botões de edição.
+Em Settings > Pages, selecione **GitHub Actions** como Source. Execute Actions >
+Publish Wind Planner > Run workflow. O workflow usa `NEXT_PUBLIC_ACCESS_MODE=private`.
+Aplique as políticas no Supabase **antes** de publicar a interface: atualizar o frontend sozinho
+não remove o acesso direto anteriormente permitido pelo banco.
 
-Não é necessário informar tokens, senhas ou chaves privadas ao assistente.
-Sem a configuração acima, o site mostra “Armazenamento em nuvem ainda não configurado” e não finge salvar dados.
+Sem URL/chave, o app informa que a nuvem não foi configurada; não salva dados locais como se
+estivessem na nuvem. A configuração do projeto Supabase exige acesso administrativo ao serviço.
 
-## Comportamento e Proteções
+## Entrar, Criar e Consultar
 
-- Modo público é ativado no build do GitHub Pages; ignoramos dados antigos do localStorage.
-- Não ocorre importação/publicação automática de atas ou anexos locais.
-- Visitantes têm leitura anônima apenas da publicação atual, sem acesso ao histórico administrativo.
-- Somente usuários cadastrados na tabela privada `wp_admins` gravam pela função autorizada.
-- Alterar permissões ou estado no DevTools não autoriza gravação no banco.
-- Revisão otimista impede sobrescrita silenciosa por outra sessão; o conflito preserva alterações na tela.
-- Em erro, exporte seu trabalho antes de recarregar. Não é feita gravação local disfarçada de cloud.
-- Anexos fazem parte dos dados públicos; qualquer visitante poderá baixá-los.
-- Logout é bloqueado enquanto há alterações não publicadas. Evite uso em computador compartilhado.
-- Atualizar consulta a versão corrente no banco; não há sincronização por websocket nesta versão.
-- O modo local de desenvolvimento continua disponível sem variáveis de nuvem, com dados fictícios.
+Abra o site, informe o e-mail responsável e clique em **Receber link de acesso**.
+Abra o link na mesma origem do app. Depois da validação da sessão e das permissões,
+o workspace abre com o botão **Nova ata**, no painel e em Atas semanais.
+A antiga senha compartilhada não concede acesso ao workspace na nuvem.
 
-## Limites Deste Modo
+As pastas são os registros em **Parques eólicos**. Cada ata pertence à pasta selecionada no
+campo **Parque eólico** (`parkId`); seus anexos ficam associados à mesma ata.
+**Consultar atas** abre o histórico filtrado daquela pasta; **Nova ata** já seleciona a pasta.
+Cliente, estado, gestor e capacidades ficam vazios/zero até serem informados pelo responsável,
+sem dados operacionais fictícios. É possível complementar as pastas e cadastrar outras.
 
-O perfil público usa snapshot JSONB com controle de revisão e histórico privado no PostgreSQL Supabase.
-É adequado a uma publicação pequena, não ao objetivo original de 100 mil atas ou múltiplos editores simultâneos.
-Limite de 20 MB no documento completo; arquivos continuam limitados a 2 MB cada na interface.
-Para grandes históricos e anexos, migrar a publicação para tabelas por entidade e Storage privado/público
-com política por documento. Backups e quotas devem ser administrados pelo responsável.
-O backend NestJS corporativo permanece independente e não precisa ser exposto ao público.
-Envio de e-mail de atas continua simulado; autenticação por e-mail do responsável é um fluxo diferente.
+Salve e aguarde **Atas privadas na nuvem · revisão N** antes de sair.
+Outra sessão da mesma conta recupera os registros salvos. Em erro de salvamento, exporte
+as alterações antes de recarregar; logout é bloqueado enquanto há mudanças não publicadas.
+Uma sessão encerrada remove os dados privados da tela.
 
-## Segurança de Publicação
+Verifique também em janela anônima: somente a tela de autenticação deve aparecer,
+sem atas nem botão de criação. Outra conta autenticada não deve ler o workspace ou histórico.
 
-Tudo publicado é acessível na internet sem conta, inclusive participantes, nomes, links e anexos.
-Não publique dados operacionais internos da Vestas, informações pessoais, segredos ou documentos de clientes
-sem autorização explícita. Um link não indexado não é controle de acesso.
-Para conteúdo confidencial, use acesso corporativo autenticado, não este perfil público.
+## Armazenamento e Limites
+
+Pastas são agrupamentos lógicos no snapshot JSONB do PostgreSQL Supabase, **não diretórios
+do OneDrive/SharePoint nem objetos de um bucket Storage**. Atas e anexos são persistidos
+na nuvem dentro desse snapshot; o PDF é gerado para download, não automaticamente armazenado
+como um arquivo separado. Não há importação automática de dados antigos do navegador.
+
+O documento completo tem limite de 20 MB; cada anexo tem limite de 2 MB na interface.
+Histórico privado e controle de revisão evitam sobrescrita silenciosa por outra sessão.
+Atualizar consulta a versão corrente; não há sincronização por websocket.
+Para grandes históricos, use tabelas por entidade e Storage privado com políticas próprias.
+Backups, quotas, recuperação e autorização corporativa do uso do serviço devem ser administrados
+pelo responsável. Não há promessa de armazenamento gratuito ilimitado.
+
+Envio de atas por e-mail permanece simulado. Autenticação por link de e-mail é um fluxo real
+separado. O backend NestJS e suas integrações corporativas continuam independentes.
