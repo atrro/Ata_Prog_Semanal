@@ -45,7 +45,10 @@ NEXT_PUBLIC para eles.** A antiga senha de demonstração não é usada no servi
 7. Compartilhe somente o endereço Render e a senha por canal interno autorizado.
 
 O código está pronto para deploy, mas publicar código no GitHub **não ativa o Render**.
-O GitHub Pages continua sendo uma implantação separada; não hospeda o servidor company.
+O GitHub Pages publica somente `site/index.html`, que encaminha para
+`https://wind-planner-afbg.onrender.com/`, com um link alternativo.
+Ele não hospeda o servidor company nem solicita a senha. Se o endereço Render mudar,
+atualize o destino em `site/index.html` e republique o Pages.
 
 ## Acesso e Operação
 
