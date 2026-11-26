@@ -20,10 +20,11 @@ test("Supabase SQL: atas privadas, pastas e uma única conta responsável", asyn
     await root.query(`CREATE DATABASE ${database}`);
     const target = new URL(source); target.pathname = `/${database}`;
     pool = new pg.Pool({ connectionString: target.href });
-    await pool.query("CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY); CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; GRANT USAGE ON SCHEMA public,auth TO anon,authenticated; GRANT EXECUTE ON FUNCTION auth.uid() TO anon,authenticated");
+    await pool.query("CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY); CREATE TABLE auth.identities(user_id uuid REFERENCES auth.users(id), provider text, identity_data jsonb); CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; GRANT USAGE ON SCHEMA public,auth TO anon,authenticated; GRANT EXECUTE ON FUNCTION auth.uid() TO anon,authenticated");
     await pool.query(await readFile("database/supabase-public.sql", "utf8"));
     await pool.query("INSERT INTO auth.users(id) VALUES($1),($2)", [admin, other]);
-    await pool.query("INSERT INTO public.wp_admins(user_id) VALUES($1)", [admin]);
+    await pool.query("INSERT INTO auth.identities(user_id,provider,identity_data) VALUES($1,'github',$2),($3,'github',$4)", [admin, JSON.stringify({ user_name: "Owner-Login" }), other, JSON.stringify({ user_name: "visitor" })]);
+    await pool.query("INSERT INTO public.wp_admins(github_login) VALUES($1)", ["owner-login"]);
     const initialRevision = Number((await pool.query("SELECT revision FROM public.wp_workspace")).rows[0].revision);
     const payload = JSON.stringify((await pool.query("SELECT data FROM public.wp_workspace")).rows[0].data);
     await context.test("visitante não lê atas nem anexos", async () => {
@@ -35,8 +36,14 @@ test("Supabase SQL: atas privadas, pastas e uma única conta responsável", asyn
       const history = await withRole("authenticated", other, client => client.query("SELECT data FROM public.wp_public_history"));
       assert.equal(history.rowCount, 0);
     });
+    await context.test("e-mail ou outro provedor não concedem acesso de responsável", async () => {
+      await pool.query("INSERT INTO auth.identities(user_id,provider,identity_data) VALUES($1,'email',$2)", [other, JSON.stringify({ user_name: "owner-login", email: "owner@example.com" })]);
+      const result = await withRole("authenticated", other, client => client.query("SELECT public.wp_is_admin() AS admin"));
+      assert.equal(result.rows[0].admin, false);
+      await pool.query("DELETE FROM auth.identities WHERE user_id=$1 AND provider='email'", [other]);
+    });
     await context.test("somente uma conta pode ser responsável", async () => {
-      await assert.rejects(pool.query("INSERT INTO public.wp_admins(user_id) VALUES($1)", [other]), { code: "23505" });
+      await assert.rejects(pool.query("INSERT INTO public.wp_admins(github_login) VALUES($1)", ["second-owner"]), { code: "23505" });
     });
     await context.test("responsável lê exatamente as 54 pastas predefinidas", async () => {
       const result = await withRole("authenticated", admin, client => client.query("SELECT data FROM public.wp_workspace"));
@@ -51,7 +58,7 @@ test("Supabase SQL: atas privadas, pastas e uma única conta responsável", asyn
     await context.test("visitante não chama função de gravação", async () => { await assert.rejects(withRole("anon", null, client => client.query("SELECT public.save_wp_workspace(0,'{\"minutes\":[],\"parks\":[]}')")), { code: "42501" }); });
     await context.test("usuário autenticado sem permissão não grava nem promove a si mesmo", async () => {
       await assert.rejects(withRole("authenticated", other, client => client.query("SELECT public.save_wp_workspace(0,'{\"minutes\":[],\"parks\":[]}')")), { code: "42501" });
-      await assert.rejects(withRole("authenticated", other, client => client.query("INSERT INTO public.wp_admins(user_id) VALUES($1)", [other])), { code: "42501" });
+      await assert.rejects(withRole("authenticated", other, client => client.query("INSERT INTO public.wp_admins(github_login) VALUES($1)", ["visitor"])), { code: "42501" });
     });
     await context.test("administrador grava com snapshot auditado", async () => { await withRole("authenticated", admin, async client => { const saved = await client.query("SELECT public.save_wp_workspace($1,$2) AS revision", [initialRevision, payload]); assert.equal(Number(saved.rows[0].revision), initialRevision + 1); const history = await client.query("SELECT actor_id FROM public.wp_public_history"); assert.equal(history.rows[0].actor_id, admin); }); });
     await context.test("versão antiga é rejeitada", async () => { await assert.rejects(withRole("authenticated", admin, client => client.query("SELECT public.save_wp_workspace(99,'{\"minutes\":[],\"parks\":[]}')")), { code: "40001" }); });

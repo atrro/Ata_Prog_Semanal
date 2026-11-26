@@ -2,14 +2,14 @@
 
 ## Acesso e Painel
 
-Na implantação Render, abra o endereço fornecido à empresa e informe a **Senha da empresa**.
-Todos que conhecem a senha podem consultar e alterar atas. Não é necessário login GitHub.
-Atas e anexos são salvos no repositório privado pelo servidor. Aguarde a confirmação da
+Site publicado no GitHub Pages: entre com **Entrar com GitHub**, usando a conta autorizada como responsável.
+Não é preciso informar senha ao app; a autenticação acontece na página do GitHub.
+Atas e anexos são salvos no Supabase privado. Aguarde a confirmação da
 revisão; em conflito ou falha, exporte suas alterações antes de atualizar/sair.
 Use **Sair** ao terminar, principalmente em computadores compartilhados.
-Veja [Implantação Render](RENDER.md) para configuração e limites.
+Veja [Publicação e nuvem](PUBLICATION.md) para configuração e limites.
 
-No site publicado, entre pelo link enviado ao e-mail da única conta responsável.
+No site publicado, clique em **Entrar com GitHub** com a conta autorizada como responsável.
 Depois de autenticar, **Nova ata** fica disponível no painel e em Atas semanais.
 As 54 pastas pré-criadas aparecem em **Parques eólicos**; selecione a pasta no campo
 **Parque eólico** da ata. **Consultar atas** filtra o histórico por pasta e a seleciona

@@ -31,7 +31,7 @@ export function AccessGate() {
       <section className="login-panel" aria-labelledby="private-login-title">
         <span className="login-icon"><LockKeyhole size={23} /></span>
         <h1 id="private-login-title">Wind Planner</h1>
-        <p className="login-subtitle">{workspace.serverAccess ? "Acesso da empresa. Informe a senha compartilhada para consultar as pastas e criar atas na nuvem." : "Atas privadas. Entre com a única conta responsável para consultar suas pastas e criar uma nova ata."}</p>
+        <p className="login-subtitle">Atas privadas. Entre com a conta do GitHub autorizada como responsável para consultar suas pastas e criar uma nova ata.</p>
         <CloudAccess workspace={workspace} />
       </section>
     </main>;

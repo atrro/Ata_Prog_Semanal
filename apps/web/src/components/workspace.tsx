@@ -57,7 +57,7 @@ export function Workspace({ shared, onLock }: { shared: ReturnType<typeof useSha
   const [toast, setToast] = useState("");
   const [demoRole, setRole] = useState<Role>("Administrador");
   const role: Role = publicAccess ? (shared.isAdmin && shared.ready && !shared.error ? "Administrador" : "Leitor") : demoRole;
-  const actor = publicAccess ? shared.email : "Ana Martins";
+  const actor = publicAccess ? shared.account : "Ana Martins";
   const [help, setHelp] = useState(false);
   const [integration, setIntegration] = useState<string | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);

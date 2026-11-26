@@ -10,13 +10,14 @@ const parks: Park[] = folderNames.map((name, index) => ({ id: `folder-${index}`,
 async function authenticate(context: BrowserContext, userId = admin) {
   const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
   const token = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ sub: userId, aud: "authenticated", exp: Math.floor(Date.now() / 1000) + 3600 })}.test-signature`;
-  await context.addInitScript(({ id, accessToken }) => {
+  const login = userId === admin ? "owner-login" : "visitor";
+  await context.addInitScript(({ id, accessToken, login }) => {
     localStorage.setItem("sb-windplanner-test-auth-token", JSON.stringify({
       access_token: accessToken, refresh_token: "test-refresh", token_type: "bearer",
       expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
-      user: { id, aud: "authenticated", role: "authenticated", email: "owner@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() }
+      user: { id, aud: "authenticated", role: "authenticated", email: "owner@example.com", app_metadata: { provider: "github" }, user_metadata: {}, identities: [{ provider: "github", identity_data: { user_name: login } }], created_at: new Date().toISOString() }
     }));
-  }, { id: userId, accessToken: token });
+  }, { id: userId, accessToken: token, login });
 }
 
 async function navigate(page: Page, name: string) {
@@ -31,8 +32,8 @@ function cloudState() {
     await page.route("https://windplanner-test.supabase.co/**", async route => {
       const url = route.request().url();
       if (url.includes("/auth/v1/logout")) { await route.fulfill({ status: 204 }); return; }
-      if (url.includes("/auth/v1/user")) { await route.fulfill({ json: { id: userId, aud: "authenticated", role: "authenticated", email: "owner@example.com", app_metadata: {}, user_metadata: {} } }); return; }
-      if (url.includes("/rest/v1/wp_admins")) { await route.fulfill({ json: userId === admin ? { user_id: admin } : null }); return; }
+      if (url.includes("/auth/v1/user")) { await route.fulfill({ json: { id: userId, aud: "authenticated", role: "authenticated", email: "owner@example.com", app_metadata: { provider: "github" }, user_metadata: {}, identities: [{ provider: "github", identity_data: { user_name: userId === admin ? "owner-login" : "visitor" } }] } }); return; }
+      if (url.includes("/rpc/wp_is_admin")) { await route.fulfill({ json: userId === admin }); return; }
       if (userId !== admin) { await route.fulfill({ status: 403, json: { message: "Not authorized" } }); return; }
       if (url.includes("/rpc/save_wp_workspace")) {
         if (saveFails) { await route.fulfill({ status: 503, json: { message: "Offline" } }); return; }
@@ -56,7 +57,7 @@ test("sem login não consulta a nuvem nem revela atas, mesmo contornando a antig
   });
   await page.goto("./");
   await expect(page.getByText("Acesso privado · conta responsável", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("E-mail do responsável")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Entrar com GitHub", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toHaveCount(0);
   await expect(page.locator(".topbar")).toHaveCount(0);
   await expect(page.getByText("CONTEUDO LOCAL PRIVADO")).toHaveCount(0);
@@ -64,11 +65,19 @@ test("sem login não consulta a nuvem nem revela atas, mesmo contornando a antig
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test("botão inicia login com GitHub pelo Supabase", async ({ page }) => {
+  await page.route("https://windplanner-test.supabase.co/**", route => route.fulfill({ status: 200, contentType: "text/html", body: "<html></html>" }));
+  await page.goto("./");
+  const authorize = page.waitForRequest(request => request.url().includes("/auth/v1/authorize") && request.url().includes("provider=github"));
+  await page.getByRole("button", { name: "Entrar com GitHub", exact: true }).click();
+  await authorize;
+});
+
 test("outra conta autenticada não tem acesso", async ({ page, context }) => {
   await authenticate(context, other);
   await cloudState()(page, other);
   await page.goto("./");
-  await expect(page.getByText("Esta conta não está autorizada a acessar as atas.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Esta conta do GitHub não está autorizada a acessar as atas.", { exact: true })).toBeVisible();
   await expect(page.locator(".topbar")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toHaveCount(0);
 });

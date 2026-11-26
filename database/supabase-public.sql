@@ -1,14 +1,38 @@
 BEGIN;
 
+-- Responsible accounts are GitHub logins (lowercase). Only the GitHub identity
+-- linked to the Supabase user is trusted, never user-editable metadata.
 CREATE TABLE IF NOT EXISTS public.wp_admins (
-  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
+  github_login text PRIMARY KEY CHECK(github_login=lower(github_login) AND github_login ~ '^[a-z0-9][a-z0-9-]{0,38}$')
 );
+-- Migration from the e-mail model: keep only GitHub-login rows, drop the old user_id.
+ALTER TABLE public.wp_admins ADD COLUMN IF NOT EXISTS github_login text;
+DELETE FROM public.wp_admins WHERE github_login IS NULL;
+ALTER TABLE public.wp_admins DROP COLUMN IF EXISTS user_id CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.wp_admins'::regclass AND contype='p') THEN
+    ALTER TABLE public.wp_admins ADD PRIMARY KEY (github_login);
+  END IF;
+END $$;
 ALTER TABLE public.wp_admins ENABLE ROW LEVEL SECURITY;
 -- A constant unique key allows at most one responsible account.
 CREATE UNIQUE INDEX IF NOT EXISTS wp_single_admin ON public.wp_admins ((true));
-DROP POLICY IF EXISTS admin_self_read ON public.wp_admins;
-CREATE POLICY admin_self_read ON public.wp_admins FOR SELECT TO authenticated USING(user_id=auth.uid());
 REVOKE ALL ON public.wp_admins FROM PUBLIC,anon,authenticated;
+
+-- True when the caller signed in with GitHub and the login matches an admin row.
+CREATE OR REPLACE FUNCTION public.wp_is_admin()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
+  SELECT auth.uid() IS NOT NULL AND EXISTS(
+    SELECT 1
+    FROM auth.identities i
+    JOIN public.wp_admins a ON a.github_login=lower(i.identity_data->>'user_name')
+    WHERE i.user_id=auth.uid() AND i.provider='github'
+  );
+$$;
+REVOKE ALL ON FUNCTION public.wp_is_admin() FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.wp_is_admin() TO authenticated;
+DROP POLICY IF EXISTS admin_self_read ON public.wp_admins;
+CREATE POLICY admin_self_read ON public.wp_admins FOR SELECT TO authenticated USING(public.wp_is_admin());
 GRANT SELECT ON public.wp_admins TO authenticated;
 
 CREATE TABLE IF NOT EXISTS public.wp_workspace (
@@ -24,7 +48,7 @@ ALTER TABLE public.wp_workspace ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS public_read ON public.wp_workspace;
 DROP POLICY IF EXISTS owner_read ON public.wp_workspace;
 CREATE POLICY owner_read ON public.wp_workspace FOR SELECT TO authenticated
-  USING(id='public' AND EXISTS(SELECT 1 FROM public.wp_admins WHERE user_id=auth.uid()));
+  USING(id='public' AND public.wp_is_admin());
 REVOKE ALL ON public.wp_workspace FROM PUBLIC,anon,authenticated;
 GRANT SELECT ON public.wp_workspace TO authenticated;
 
@@ -37,7 +61,7 @@ CREATE TABLE IF NOT EXISTS public.wp_public_history (
 ALTER TABLE public.wp_public_history ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS admin_history_read ON public.wp_public_history;
 CREATE POLICY admin_history_read ON public.wp_public_history FOR SELECT TO authenticated
-  USING(EXISTS(SELECT 1 FROM public.wp_admins WHERE user_id=auth.uid()));
+  USING(public.wp_is_admin());
 REVOKE ALL ON public.wp_public_history FROM PUBLIC,anon,authenticated;
 GRANT SELECT ON public.wp_public_history TO authenticated;
 
@@ -45,7 +69,7 @@ CREATE OR REPLACE FUNCTION public.save_wp_workspace(expected_revision bigint,pay
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE current_revision bigint;
 BEGIN
-  IF auth.uid() IS NULL OR NOT EXISTS(SELECT 1 FROM public.wp_admins WHERE user_id=auth.uid()) THEN
+  IF NOT public.wp_is_admin() THEN
     RAISE EXCEPTION 'Administrator required' USING ERRCODE='42501';
   END IF;
   IF payload IS NULL OR jsonb_typeof(payload) IS DISTINCT FROM 'object'

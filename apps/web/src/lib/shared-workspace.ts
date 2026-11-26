@@ -1,11 +1,9 @@
 "use client";
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type User } from "@supabase/supabase-js";
 import { useEffect, useRef, useState } from "react";
-import { z } from "zod";
 import { minutesSeed, parksSeed, type Minute, type Park } from "./domain";
 import { sharedStateSchema } from "./workspace-schema";
-import { serverAccess, useServerWorkspace } from "./server-workspace";
 export { sharedStateSchema } from "./workspace-schema";
 
 const cloudUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -13,13 +11,18 @@ const cloudKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 export const publicAccess = ["private", "public"].includes(process.env.NEXT_PUBLIC_ACCESS_MODE ?? "") || Boolean(cloudUrl);
 const cloud = cloudUrl && cloudKey ? createClient(cloudUrl, cloudKey) : null;
 
+function githubLogin(user: User) {
+  const identity = user.identities?.find(item => item.provider === "github");
+  const login = identity?.identity_data?.user_name;
+  return typeof login === "string" ? login : "";
+}
+
 export function useSharedWorkspace() {
-  const server = useServerWorkspace();
   const [minutes, setMinutes] = useState<Minute[]>(publicAccess ? [] : minutesSeed);
   const [parks, setParks] = useState<Park[]>(publicAccess ? [] : parksSeed);
   const [ready, setReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [email, setEmail] = useState("");
+  const [account, setAccount] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -34,7 +37,7 @@ export function useSharedWorkspace() {
     authorizedUser.current = null;
     baseline.current = "";
     current.current = { minutes: [], parks: [] };
-    setMinutes([]); setParks([]); setRevision(0); setReady(false); setIsAdmin(false); setEmail("");
+    setMinutes([]); setParks([]); setRevision(0); setReady(false); setIsAdmin(false); setAccount("");
   };
 
   const reload = async (discard = false, version = sessionVersion.current) => {
@@ -54,7 +57,6 @@ export function useSharedWorkspace() {
   };
 
   useEffect(() => {
-    if (serverAccess) return;
     if (!publicAccess) {
       try {
         const saved = localStorage.getItem("wind-planner-v1");
@@ -75,16 +77,16 @@ export function useSharedWorkspace() {
       if (!active || version !== sessionVersion.current) return;
       const user = data.user;
       if (userError || !user) { clearSession(); setError("Sessão inválida ou expirada. Entre novamente."); return; }
-      const permission = await cloud.from("wp_admins").select("user_id").eq("user_id", user.id).maybeSingle();
+      const permission = await cloud.rpc("wp_is_admin");
       if (!active || version !== sessionVersion.current) return;
-      if (permission.error || !permission.data) {
-        clearSession(); setEmail(user.email ?? "");
-        setError(permission.error ? "Não foi possível verificar a autorização da conta." : "Esta conta não está autorizada a acessar as atas.");
+      if (permission.error || permission.data !== true) {
+        clearSession(); setAccount(githubLogin(user));
+        setError(permission.error ? "Não foi possível verificar a autorização da conta." : "Esta conta do GitHub não está autorizada a acessar as atas.");
         return;
       }
       const changed = authorizedUser.current !== user.id;
       authorizedUser.current = user.id;
-      setEmail(user.email ?? ""); setIsAdmin(true);
+      setAccount(githubLogin(user)); setIsAdmin(true);
       if (changed || !baseline.current) await reload(true, version);
     };
     void session();
@@ -93,7 +95,6 @@ export function useSharedWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (serverAccess) return;
     if (!ready) return;
     if (!publicAccess) {
       try { const saved = JSON.parse(localStorage.getItem("wind-planner-v1") ?? "{}"); localStorage.setItem("wind-planner-v1", JSON.stringify({ ...saved, minutes, parks })); }
@@ -120,18 +121,17 @@ export function useSharedWorkspace() {
   }, [minutes, parks, ready, isAdmin, error, saving, revision]);
 
   useEffect(() => {
-    if (serverAccess) return;
     if (!publicAccess) return;
     const beforeUnload = (event: BeforeUnloadEvent) => { if (baseline.current && JSON.stringify(current.current) !== baseline.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", beforeUnload);
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, []);
 
-  const signIn = async (address: string) => {
+  const signIn = async () => {
     if (!cloud) throw new Error("Nuvem ainda não configurada.");
     const redirect = new URL(window.location.href); redirect.hash = ""; redirect.search = "";
-    const result = await cloud.auth.signInWithOtp({ email: z.email().parse(address), options: { shouldCreateUser: false, emailRedirectTo: redirect.href } });
-    if (result.error) throw new Error("Não foi possível solicitar acesso. Verifique o cadastro de administrador e tente novamente.");
+    const result = await cloud.auth.signInWithOAuth({ provider: "github", options: { redirectTo: redirect.href } });
+    if (result.error) throw new Error("Não foi possível iniciar o login com GitHub. Tente novamente.");
   };
   const signOut = async () => {
     if (baseline.current && JSON.stringify(current.current) !== baseline.current) throw new Error("Existem alterações não publicadas. Salve ou exporte antes de sair.");
@@ -139,5 +139,5 @@ export function useSharedWorkspace() {
     if (result?.error) throw new Error("Não foi possível encerrar a sessão.");
     sessionVersion.current++; clearSession(); setError("");
   };
-  return serverAccess ? server : { minutes, setMinutes, parks, setParks, ready, isAdmin, email, error, saving, revision, configured: Boolean(cloud), publicAccess, reload, signIn, signOut, serverAccess: false };
+  return { minutes, setMinutes, parks, setParks, ready, isAdmin, account, error, saving, revision, configured: Boolean(cloud), publicAccess, reload, signIn, signOut };
 }
