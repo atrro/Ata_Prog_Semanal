@@ -2,14 +2,14 @@
 
 ## Acesso e Painel
 
-Site publicado no GitHub Pages: entre com **Entrar com GitHub**, usando a conta autorizada como responsável.
-Não é preciso informar senha ao app; a autenticação acontece na página do GitHub.
+Site publicado no GitHub Pages: informe a **senha de acesso** e clique em **Entrar**.
+A senha é verificada no servidor do Supabase; o site não guarda a senha.
 Atas e anexos são salvos no Supabase privado. Aguarde a confirmação da
 revisão; em conflito ou falha, exporte suas alterações antes de atualizar/sair.
 Use **Sair** ao terminar, principalmente em computadores compartilhados.
 Veja [Publicação e nuvem](PUBLICATION.md) para configuração e limites.
 
-No site publicado, clique em **Entrar com GitHub** com a conta autorizada como responsável.
+No site publicado, informe a senha de acesso e clique em **Entrar**.
 Depois de autenticar, **Nova ata** fica disponível no painel e em Atas semanais.
 As 54 pastas pré-criadas aparecem em **Parques eólicos**; selecione a pasta no campo
 **Parque eólico** da ata. **Consultar atas** filtra o histórico por pasta e a seleciona

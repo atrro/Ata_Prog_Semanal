@@ -7,12 +7,11 @@ Interface em português, responsiva, com identidade visual inspirada na Vestas.
 
 ## Site com Atas Privadas
 
-**Acesso privado no GitHub:** a interface publicada no GitHub Pages entra com **Entrar com GitHub**
-e usa o Supabase Auth para validar a conta. Somente o login GitHub configurado como responsável
-pode consultar, criar e alterar atas. O banco Supabase bloqueia leitura anônima e acesso de outras contas por RLS.
-O GitHub Pages hospeda a interface e a integração Supabase armazena os dados privados.
-O script de configuração pré-cria as 54 pastas de parques e impede múltiplos responsáveis.
-O responsável precisa configurar o projeto Supabase, o OAuth App do GitHub e as duas variáveis públicas uma única vez.
+**Acesso privado por senha:** a interface publicada no GitHub Pages pede a senha de acesso compartilhada.
+A senha é verificada no Supabase por funções RPC (hash bcrypt); somente quem a informa lê ou altera atas.
+O banco bloqueia leitura e escrita diretas por RLS e privilégios. O GitHub Pages hospeda a interface
+e o Supabase armazena os dados privados. O script de configuração pré-cria as 54 pastas de parques.
+O responsável precisa executar o script SQL, definir a senha e configurar as duas variáveis públicas uma única vez.
 Até isso ocorrer, o site informa que a nuvem não está configurada e não publica dados fictícios ou locais.
 Veja o [passo a passo de publicação e nuvem](docs/PUBLICATION.md).
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { createClient, type User } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { useEffect, useRef, useState } from "react";
 import { minutesSeed, parksSeed, type Minute, type Park } from "./domain";
 import { sharedStateSchema } from "./workspace-schema";
@@ -11,44 +11,27 @@ const cloudKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 export const publicAccess = ["private", "public"].includes(process.env.NEXT_PUBLIC_ACCESS_MODE ?? "") || Boolean(cloudUrl);
 const cloud = cloudUrl && cloudKey ? createClient(cloudUrl, cloudKey) : null;
 
-function githubLogin(user: User) {
-  const identity = user.identities?.find(item => item.provider === "github");
-  const login = identity?.identity_data?.user_name;
-  return typeof login === "string" ? login : "";
-}
-
 export function useSharedWorkspace() {
   const [minutes, setMinutes] = useState<Minute[]>(publicAccess ? [] : minutesSeed);
   const [parks, setParks] = useState<Park[]>(publicAccess ? [] : parksSeed);
   const [ready, setReady] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [account, setAccount] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [revision, setRevision] = useState(0);
   const baseline = useRef("");
   const inFlight = useRef(false);
   const current = useRef({ minutes, parks });
-  const sessionVersion = useRef(0);
-  const authorizedUser = useRef<string | null>(null);
+  const accessPassword = useRef("");
   current.current = { minutes, parks };
 
-  const clearSession = () => {
-    authorizedUser.current = null;
-    baseline.current = "";
-    current.current = { minutes: [], parks: [] };
-    setMinutes([]); setParks([]); setRevision(0); setReady(false); setIsAdmin(false); setAccount("");
-  };
+  const hasUnsavedChanges = () => Boolean(baseline.current) && JSON.stringify(current.current) !== baseline.current;
 
-  const reload = async (discard = false, version = sessionVersion.current) => {
-    if (!cloud) return;
-    if (!discard && baseline.current && JSON.stringify(current.current) !== baseline.current && !window.confirm("Há alterações não salvas. Recarregar e descartá-las?")) return;
-    setError("");
-    const result = await cloud.from("wp_workspace").select("data,revision").eq("id", "public").single();
-    if (version !== sessionVersion.current) return;
-    if (result.error) { setError("Não foi possível ler a nuvem. Verifique a conexão e a configuração do Supabase."); return; }
+  const fetchWorkspace = async (password: string) => {
+    if (!cloud) throw new Error("Armazenamento em nuvem ainda não configurado. Nenhum dado compartilhado está disponível.");
+    const result = await cloud.rpc("wp_load_workspace", { access_password: password });
+    if (result.error) throw new Error(result.error.code === "42501" ? "Senha incorreta. Tente novamente." : "Não foi possível ler a nuvem. Verifique a conexão e a configuração do Supabase.");
     const parsed = sharedStateSchema.safeParse(result.data.data);
-    if (!parsed.success) { setError("Os dados da nuvem não têm o formato esperado. Contate o responsável."); return; }
+    if (!parsed.success) throw new Error("Os dados da nuvem não têm o formato esperado. Contate o responsável.");
     baseline.current = JSON.stringify(parsed.data);
     setMinutes(parsed.data.minutes);
     setParks(parsed.data.parks);
@@ -65,33 +48,7 @@ export function useSharedWorkspace() {
       setReady(true);
       return;
     }
-    if (!cloud) { setError("Armazenamento em nuvem ainda não configurado. Nenhum dado compartilhado está disponível."); return; }
-    let active = true;
-    const session = async () => {
-      const version = ++sessionVersion.current;
-      const { data: stored, error: sessionError } = await cloud.auth.getSession();
-      if (!active || version !== sessionVersion.current) return;
-      if (sessionError) { clearSession(); setError("Não foi possível verificar a sessão. Tente entrar novamente."); return; }
-      if (!stored.session) { clearSession(); setError(""); return; }
-      const { data, error: userError } = await cloud.auth.getUser();
-      if (!active || version !== sessionVersion.current) return;
-      const user = data.user;
-      if (userError || !user) { clearSession(); setError("Sessão inválida ou expirada. Entre novamente."); return; }
-      const permission = await cloud.rpc("wp_is_admin");
-      if (!active || version !== sessionVersion.current) return;
-      if (permission.error || permission.data !== true) {
-        clearSession(); setAccount(githubLogin(user));
-        setError(permission.error ? "Não foi possível verificar a autorização da conta." : "Esta conta do GitHub não está autorizada a acessar as atas.");
-        return;
-      }
-      const changed = authorizedUser.current !== user.id;
-      authorizedUser.current = user.id;
-      setAccount(githubLogin(user)); setIsAdmin(true);
-      if (changed || !baseline.current) await reload(true, version);
-    };
-    void session();
-    const { data: subscription } = cloud.auth.onAuthStateChange(() => { setTimeout(() => { if (active) void session(); }, 0); });
-    return () => { active = false; sessionVersion.current++; subscription.subscription.unsubscribe(); };
+    if (!cloud) setError("Armazenamento em nuvem ainda não configurado. Nenhum dado compartilhado está disponível.");
   }, []);
 
   useEffect(() => {
@@ -101,24 +58,22 @@ export function useSharedWorkspace() {
       catch { setError("Armazenamento local cheio. Exporte seus dados e reduza os anexos."); }
       return;
     }
-    if (!cloud || !isAdmin || error || saving || inFlight.current) return;
+    if (!cloud || error || saving || inFlight.current) return;
     const payload = JSON.stringify({ minutes, parks });
     if (payload === baseline.current) return;
     const timeout = setTimeout(async () => {
-      const user = authorizedUser.current;
       inFlight.current = true;
       setSaving(true);
       try {
-        const result = await cloud.rpc("save_wp_workspace", { expected_revision: revision, payload: JSON.parse(payload) });
-        if (authorizedUser.current !== user) return;
-        if (result.error) throw new Error(result.error.code === "40001" ? "Outra sessão alterou os dados. Exporte suas alterações e recarregue antes de continuar." : "Não foi possível salvar na nuvem. Suas alterações ainda não foram publicadas.");
+        const result = await cloud.rpc("save_wp_workspace", { access_password: accessPassword.current, expected_revision: revision, payload: JSON.parse(payload) });
+        if (result.error) throw new Error(result.error.code === "40001" ? "Outra sessão alterou os dados. Exporte suas alterações e recarregue antes de continuar." : result.error.code === "42501" ? "Senha de acesso inválida. Saia e entre novamente." : "Não foi possível salvar na nuvem. Suas alterações ainda não foram publicadas.");
         baseline.current = payload;
         setRevision(result.data);
-      } catch (failure) { if (authorizedUser.current === user) setError(failure instanceof Error ? failure.message : "Falha ao salvar na nuvem."); }
+      } catch (failure) { setError(failure instanceof Error ? failure.message : "Falha ao salvar na nuvem."); }
       finally { inFlight.current = false; setSaving(false); }
     }, 500);
     return () => clearTimeout(timeout);
-  }, [minutes, parks, ready, isAdmin, error, saving, revision]);
+  }, [minutes, parks, ready, error, saving, revision]);
 
   useEffect(() => {
     if (!publicAccess) return;
@@ -127,17 +82,23 @@ export function useSharedWorkspace() {
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, []);
 
-  const signIn = async () => {
-    if (!cloud) throw new Error("Nuvem ainda não configurada.");
-    const redirect = new URL(window.location.href); redirect.hash = ""; redirect.search = "";
-    const result = await cloud.auth.signInWithOAuth({ provider: "github", options: { redirectTo: redirect.href } });
-    if (result.error) throw new Error("Não foi possível iniciar o login com GitHub. Tente novamente.");
+  const reload = async () => {
+    if (hasUnsavedChanges() && !window.confirm("Há alterações não salvas. Recarregar e descartá-las?")) return;
+    setError("");
+    try { await fetchWorkspace(accessPassword.current); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : "Não foi possível ler a nuvem."); }
   };
-  const signOut = async () => {
-    if (baseline.current && JSON.stringify(current.current) !== baseline.current) throw new Error("Existem alterações não publicadas. Salve ou exporte antes de sair.");
-    const result = await cloud?.auth.signOut();
-    if (result?.error) throw new Error("Não foi possível encerrar a sessão.");
-    sessionVersion.current++; clearSession(); setError("");
+  const unlock = async (password: string) => {
+    await fetchWorkspace(password);
+    accessPassword.current = password;
+    setError("");
   };
-  return { minutes, setMinutes, parks, setParks, ready, isAdmin, account, error, saving, revision, configured: Boolean(cloud), publicAccess, reload, signIn, signOut };
+  const lock = () => {
+    if (hasUnsavedChanges()) throw new Error("Existem alterações não publicadas. Salve ou exporte antes de sair.");
+    accessPassword.current = "";
+    baseline.current = "";
+    current.current = { minutes: [], parks: [] };
+    setMinutes([]); setParks([]); setRevision(0); setReady(false); setError("");
+  };
+  return { minutes, setMinutes, parks, setParks, ready, error, saving, revision, configured: Boolean(cloud), publicAccess, reload, unlock, lock };
 }

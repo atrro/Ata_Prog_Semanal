@@ -6,76 +6,109 @@ import pg from "pg";
 
 const database = `windplanner_public_test_${randomUUID().replaceAll("-", "")}`;
 const source = process.env.PUBLIC_DB_TEST_URL ?? "postgresql://windplanner:local-development-only@127.0.0.1:5432/windplanner";
+const password = "senha-de-teste-123";
+const newPassword = "outra-senha-teste-456";
 const root = new pg.Pool({ connectionString: source, connectionTimeoutMillis: 5000 });
-test("Supabase SQL: atas privadas, pastas e uma única conta responsável", async context => {
+
+test("Supabase SQL: senha compartilhada, pastas e gravação auditada", async context => {
   let pool;
-  const admin = "00000000-0000-4000-8000-000000000001";
-  const other = "00000000-0000-4000-8000-000000000002";
-  const withRole = async (role, user, action) => {
+  const schema = await readFile("database/supabase-public.sql", "utf8");
+  const expectedFolders = [...schema.split("unnest(ARRAY[")[1].split("]) WITH ORDINALITY")[0].matchAll(/'([^']+)'/g)].map(match => match[1]);
+  const asRole = async (role, sql, params = []) => {
     const client = await pool.connect();
-    try { await client.query("BEGIN"); await client.query(`SET LOCAL ROLE ${role}`); await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [user ?? ""]); const result = await action(client); await client.query("ROLLBACK"); return result; } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+    try { await client.query(`SET ROLE ${role}`); return await client.query(sql, params); }
+    finally { await client.query("RESET ROLE"); client.release(); }
   };
+  const loadWorkspace = async pw => (await asRole("anon", "SELECT public.wp_load_workspace($1) AS workspace", [pw])).rows[0].workspace;
   try {
     await root.query("DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF; IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF; END $$");
     await root.query(`CREATE DATABASE ${database}`);
     const target = new URL(source); target.pathname = `/${database}`;
     pool = new pg.Pool({ connectionString: target.href });
-    await pool.query("CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY); CREATE TABLE auth.identities(user_id uuid REFERENCES auth.users(id), provider text, identity_data jsonb); CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; GRANT USAGE ON SCHEMA public,auth TO anon,authenticated; GRANT EXECUTE ON FUNCTION auth.uid() TO anon,authenticated");
-    await pool.query(await readFile("database/supabase-public.sql", "utf8"));
-    await pool.query("INSERT INTO auth.users(id) VALUES($1),($2)", [admin, other]);
-    await pool.query("INSERT INTO auth.identities(user_id,provider,identity_data) VALUES($1,'github',$2),($3,'github',$4)", [admin, JSON.stringify({ user_name: "Owner-Login" }), other, JSON.stringify({ user_name: "visitor" })]);
-    await pool.query("INSERT INTO public.wp_admins(github_login) VALUES($1)", ["owner-login"]);
-    const initialRevision = Number((await pool.query("SELECT revision FROM public.wp_workspace")).rows[0].revision);
-    const payload = JSON.stringify((await pool.query("SELECT data FROM public.wp_workspace")).rows[0].data);
-    await context.test("visitante não lê atas nem anexos", async () => {
-      await assert.rejects(withRole("anon", null, client => client.query("SELECT data FROM public.wp_workspace")), { code: "42501" });
+    await pool.query(schema);
+    await pool.query("SELECT public.wp_set_access_password($1)", [password]);
+    const initial = await loadWorkspace(password);
+    const initialRevision = initial.revision;
+
+    await context.test("senha fica armazenada somente como hash bcrypt", async () => {
+      const stored = (await pool.query("SELECT password_hash FROM public.wp_access")).rows[0].password_hash;
+      assert.match(stored, /^\$2[aby]\$12\$/);
+      assert.notEqual(stored, password);
     });
-    await context.test("conta não autorizada não lê registros ou histórico", async () => {
-      const result = await withRole("authenticated", other, client => client.query("SELECT data FROM public.wp_workspace"));
-      assert.equal(result.rowCount, 0);
-      const history = await withRole("authenticated", other, client => client.query("SELECT data FROM public.wp_public_history"));
-      assert.equal(history.rowCount, 0);
+
+    await context.test("visitante e conta autenticada não leem tabelas privadas", async () => {
+      await assert.rejects(asRole("anon", "SELECT data FROM public.wp_workspace"), { code: "42501" });
+      await assert.rejects(asRole("anon", "SELECT password_hash FROM public.wp_access"), { code: "42501" });
+      await assert.rejects(asRole("anon", "SELECT * FROM public.wp_public_history"), { code: "42501" });
+      await assert.rejects(asRole("authenticated", "SELECT data FROM public.wp_workspace"), { code: "42501" });
     });
-    await context.test("e-mail ou outro provedor não concedem acesso de responsável", async () => {
-      await pool.query("INSERT INTO auth.identities(user_id,provider,identity_data) VALUES($1,'email',$2)", [other, JSON.stringify({ user_name: "owner-login", email: "owner@example.com" })]);
-      const result = await withRole("authenticated", other, client => client.query("SELECT public.wp_is_admin() AS admin"));
-      assert.equal(result.rows[0].admin, false);
-      await pool.query("DELETE FROM auth.identities WHERE user_id=$1 AND provider='email'", [other]);
+
+    await context.test("senha errada ou ausente não carrega atas", async () => {
+      await assert.rejects(asRole("anon", "SELECT public.wp_load_workspace($1)", ["senha-errada-123"]), { code: "42501" });
+      await assert.rejects(asRole("anon", "SELECT public.wp_load_workspace(NULL)"), { code: "42501" });
     });
-    await context.test("somente uma conta pode ser responsável", async () => {
-      await assert.rejects(pool.query("INSERT INTO public.wp_admins(github_login) VALUES($1)", ["second-owner"]), { code: "23505" });
+
+    await context.test("senha correta carrega exatamente as 54 pastas predefinidas", async () => {
+      assert.equal(expectedFolders.length, 54);
+      assert.deepEqual(initial.data.parks.map(park => park.name), expectedFolders);
+      assert.equal(new Set(initial.data.parks.map(park => park.id)).size, 54);
     });
-    await context.test("responsável lê exatamente as 54 pastas predefinidas", async () => {
-      const result = await withRole("authenticated", admin, client => client.query("SELECT data FROM public.wp_workspace"));
-      const expected = ["Alegria", "Amontada", "Angicos", "Aroeira", "Assuruá", "Aventura", "Babilônia Centro", "Babilônia Sul CDV", "Cabeço Preto", "Caldeirão", "Campo Largo", "Catanduba", "CGN", "Copel", "Cumaru", "DELFINA", "Dom Inocêncio", "Elera", "Esquina do Vento", "Folha Larga CDV", "Folha Larga Norte", "Gargaú", "Gravatá", "Honda", "Icaraí", "Jerusalém", "Kairós", "Macambira", "Monte verde", "Morro do Chapeu I", "Morro do Chapeu II", "Mundo Novo", "Novo Horizonte", "Ouro Branco", "Pedra do Reino", "Pedra Pintada", "Pedra Rajada", "Riachão", "Rio do Vento Expansão", "Rio do Vento II", "Santa Rosa Mundo Novo", "Sento Sé", "Seridó", "Serra das Almas", "Serra das Vacas", "Serra do Assuruá", "Serra do Tigre", "Serrote e Serra do Mato", "Taiba", "Umari", "Ventos da Bahia", "Ventos do Piauí", "Vilas", "Vilas IV"];
-      assert.deepEqual(result.rows[0].data.parks.map(park => park.name), expected);
-      assert.equal(new Set(result.rows[0].data.parks.map(park => park.id)).size, 54);
+
+    await context.test("visitante não altera nem grava sem senha válida", async () => {
+      await assert.rejects(asRole("anon", "UPDATE public.wp_workspace SET revision=999"), { code: "42501" });
+      await assert.rejects(asRole("anon", "DELETE FROM public.wp_workspace"), { code: "42501" });
+      await assert.rejects(asRole("anon", "SELECT public.save_wp_workspace($1,$2,$3::jsonb)", ["senha-errada-123", initialRevision, JSON.stringify(initial.data)]), { code: "42501" });
+      await assert.rejects(asRole("anon", "SELECT public.save_wp_workspace(NULL,$1,$2::jsonb)", [initialRevision, JSON.stringify(initial.data)]), { code: "42501" });
+      assert.equal((await loadWorkspace(password)).revision, initialRevision);
     });
-    await context.test("visitante não altera nem exclui", async () => {
-      await assert.rejects(withRole("anon", null, client => client.query("UPDATE public.wp_workspace SET revision=999")), { code: "42501" });
-      await assert.rejects(withRole("anon", null, client => client.query("DELETE FROM public.wp_workspace")), { code: "42501" });
+
+    await context.test("senha não pode ser trocada nem verificada pelo navegador", async () => {
+      await assert.rejects(asRole("anon", "SELECT public.wp_set_access_password($1)", [newPassword]), { code: "42501" });
+      await assert.rejects(asRole("authenticated", "SELECT public.wp_set_access_password($1)", [newPassword]), { code: "42501" });
+      await assert.rejects(asRole("anon", "SELECT public.wp_require_access($1)", [password]), { code: "42501" });
     });
-    await context.test("visitante não chama função de gravação", async () => { await assert.rejects(withRole("anon", null, client => client.query("SELECT public.save_wp_workspace(0,'{\"minutes\":[],\"parks\":[]}')")), { code: "42501" }); });
-    await context.test("usuário autenticado sem permissão não grava nem promove a si mesmo", async () => {
-      await assert.rejects(withRole("authenticated", other, client => client.query("SELECT public.save_wp_workspace(0,'{\"minutes\":[],\"parks\":[]}')")), { code: "42501" });
-      await assert.rejects(withRole("authenticated", other, client => client.query("INSERT INTO public.wp_admins(github_login) VALUES($1)", ["visitor"])), { code: "42501" });
+
+    await context.test("gravação com senha correta cria snapshot e rejeita revisão antiga e payload inválido", async () => {
+      const payload = { ...initial.data, minutes: [{ id: "ata-1", parkId: initial.data.parks[53].id }] };
+      const saved = await asRole("anon", "SELECT public.save_wp_workspace($1,$2,$3::jsonb) AS revision", [password, initialRevision, JSON.stringify(payload)]);
+      assert.equal(Number(saved.rows[0].revision), initialRevision + 1);
+      const history = await pool.query("SELECT revision FROM public.wp_public_history ORDER BY revision");
+      assert.deepEqual(history.rows.map(row => Number(row.revision)), [initialRevision + 1]);
+      assert.equal((await loadWorkspace(password)).data.minutes.length, 1);
+      await assert.rejects(asRole("anon", "SELECT public.save_wp_workspace($1,$2,$3::jsonb)", [password, initialRevision, JSON.stringify(payload)]), { code: "40001" });
+      await assert.rejects(asRole("anon", "SELECT public.save_wp_workspace($1,$2,$3::jsonb)", [password, initialRevision + 1, '{"minutes":null,"parks":[]}']), { code: "22023" });
     });
-    await context.test("administrador grava com snapshot auditado", async () => { await withRole("authenticated", admin, async client => { const saved = await client.query("SELECT public.save_wp_workspace($1,$2) AS revision", [initialRevision, payload]); assert.equal(Number(saved.rows[0].revision), initialRevision + 1); const history = await client.query("SELECT actor_id FROM public.wp_public_history"); assert.equal(history.rows[0].actor_id, admin); }); });
-    await context.test("versão antiga é rejeitada", async () => { await assert.rejects(withRole("authenticated", admin, client => client.query("SELECT public.save_wp_workspace(99,'{\"minutes\":[],\"parks\":[]}')")), { code: "40001" }); });
-    await context.test("payload inválido é rejeitado", async () => { await assert.rejects(withRole("authenticated", admin, client => client.query("SELECT public.save_wp_workspace(0,'{\"minutes\":null}')")), { code: "22023" }); });
-    await context.test("histórico não é público nem alterável pelo administrador", async () => {
-      await assert.rejects(withRole("anon", null, client => client.query("SELECT * FROM public.wp_public_history")), { code: "42501" });
-      await assert.rejects(withRole("authenticated", admin, client => client.query("DELETE FROM public.wp_public_history")), { code: "42501" });
+
+    await context.test("histórico não é público nem alterável pela conta autenticada", async () => {
+      await assert.rejects(asRole("authenticated", "DELETE FROM public.wp_public_history"), { code: "42501" });
     });
-    await context.test("migração remove leitura pública, preserva atas e não duplica pastas", async () => {
+
+    await context.test("trocar a senha invalida a anterior e rejeita senha curta", async () => {
+      await assert.rejects(pool.query("SELECT public.wp_set_access_password($1)", ["curta"]), { code: "22023" });
+      await pool.query("SELECT public.wp_set_access_password($1)", [newPassword]);
+      await assert.rejects(asRole("anon", "SELECT public.wp_load_workspace($1)", [password]), { code: "42501" });
+      assert.equal((await loadWorkspace(newPassword)).data.minutes.length, 1);
+    });
+
+    await context.test("executar o script de novo mantém senha, atas e pastas", async () => {
+      await pool.query(schema);
+      const after = await loadWorkspace(newPassword);
+      assert.equal(after.data.minutes.length, 1);
+      assert.equal(after.data.parks.length, 54);
+      assert.equal(after.revision, initialRevision + 1);
+    });
+
+    await context.test("migração remove a leitura pública da versão anterior e preserva atas", async () => {
       await pool.query("CREATE POLICY public_read ON public.wp_workspace FOR SELECT TO anon,authenticated USING(true); GRANT SELECT ON public.wp_workspace TO anon");
-      await pool.query(`UPDATE public.wp_workspace SET data=jsonb_set(data,'{minutes}','[{"id":"preserved","parkId":"existing"}]')`);
-      await pool.query(await readFile("database/supabase-public.sql", "utf8"));
-      await assert.rejects(withRole("anon", null, client => client.query("SELECT data FROM public.wp_workspace")), { code: "42501" });
-      const result = await pool.query("SELECT data,revision FROM public.wp_workspace");
-      assert.equal(result.rows[0].data.minutes[0].id, "preserved");
-      assert.equal(result.rows[0].data.parks.length, 54);
-      assert.equal(Number(result.rows[0].revision), initialRevision);
+      await pool.query(schema);
+      await assert.rejects(asRole("anon", "SELECT data FROM public.wp_workspace"), { code: "42501" });
+      const policies = await pool.query("SELECT 1 FROM pg_policies WHERE tablename='wp_workspace' AND policyname='public_read'");
+      assert.equal(policies.rowCount, 0);
+      assert.equal((await loadWorkspace(newPassword)).data.minutes.length, 1);
     });
-  } finally { if (pool) await pool.end(); await root.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`); await root.end(); }
+  } finally {
+    if (pool) await pool.end();
+    await root.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+    await root.end();
+  }
 });

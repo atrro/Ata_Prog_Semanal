@@ -6,7 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Activity, ArrowDown, ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, Copy, Download, Ellipsis, ExternalLink, FileCheck2, FileClock, FilePlus2, FileText, Filter, Globe2, LayoutDashboard, Link2, ListFilter, Loader2, LogOut, Mail, Menu, MessageSquare, Moon, Paperclip, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Sun, Trash2, TrendingUp, Upload, Users, Wind, X, Zap } from "lucide-react";
+import { Activity, ArrowDown, ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, Copy, Download, Ellipsis, ExternalLink, FileCheck2, FileClock, FilePlus2, FileText, Filter, Globe2, LayoutDashboard, Link2, ListFilter, Loader2, Mail, Menu, MessageSquare, Moon, Paperclip, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Sun, Trash2, TrendingUp, Upload, Users, Wind, X, Zap } from "lucide-react";
 import { Button } from "./ui/button";
 import { RichEditor } from "./rich-editor";
 import { canSend, checklistLabels, minuteSchema, minutesSeed, nextVersion, parksSeed, people, safeUrl, sectionLabels, stripHtml, type Attachment, type Minute, type MinuteFields, type Park, type Role, type Status } from "@/lib/domain";
@@ -29,7 +29,7 @@ function Avatar({ name, small = false }: { name: string; small?: boolean }) {
 }
 function Badge({ status }: { status: Status }) { return <span className={`badge ${status === "Enviada" ? "badge-green" : status === "Pendente" ? "badge-amber" : "badge-gray"}`}><span />{status}</span>; }
 
-export function Workspace({ shared, onLock }: { shared: ReturnType<typeof useSharedWorkspace>; onLock?: () => void }) {
+export function Workspace({ shared }: { shared: ReturnType<typeof useSharedWorkspace> }) {
   const { minutes, setMinutes, parks, setParks, publicAccess } = shared;
   const [view, setView] = useState<View>("dashboard");
   const [ready, setReady] = useState(false);
@@ -56,8 +56,8 @@ export function Workspace({ shared, onLock }: { shared: ReturnType<typeof useSha
   const [notification, setNotification] = useState(false);
   const [toast, setToast] = useState("");
   const [demoRole, setRole] = useState<Role>("Administrador");
-  const role: Role = publicAccess ? (shared.isAdmin && shared.ready && !shared.error ? "Administrador" : "Leitor") : demoRole;
-  const actor = publicAccess ? shared.account : "Ana Martins";
+  const role: Role = publicAccess ? (shared.ready && !shared.error ? "Administrador" : "Leitor") : demoRole;
+  const actor = publicAccess ? "Responsável" : "Ana Martins";
   const [help, setHelp] = useState(false);
   const [integration, setIntegration] = useState<string | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -106,7 +106,6 @@ export function Workspace({ shared, onLock }: { shared: ReturnType<typeof useSha
     </aside>
     <div className="main-shell"><header className="topbar"><div className="topbar-left"><Button className="mobile-toggle" variant="ghost" size="icon" onClick={() => setSidebar(true)} aria-label="Abrir menu"><Menu size={21} /></Button><span className="breadcrumb">Workspace <ChevronRight size={13} /> <strong>{names[view]}</strong></span></div><div className="topbar-right"><div className="global-search"><Search size={16} /><input placeholder="Buscar no workspace..." aria-label="Buscar no workspace" value={query} onChange={event => { setQuery(event.target.value); if (view !== "minutes" && view !== "dashboard" && view !== "parks") setView("minutes"); }} /><kbd>⌘ K</kbd></div><Button variant="ghost" size="icon" aria-label={dark ? "Ativar tema claro" : "Ativar tema escuro"} title="Alternar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</Button><div className="notification-wrap"><Button variant="ghost" size="icon" aria-label="Notificações" onClick={() => setNotification(!notification)}><Bell size={19} /><span className="notification-dot" /></Button>{notification && <div className="notification-panel"><h4>Central de notificações</h4><p><FileClock size={17} />{minutes.filter(minute => minute.status === "Pendente").length} atas aguardando envio</p><p><ShieldCheck size={17} />Seus dados estão neste navegador</p><button onClick={() => { navigate("minutes"); setStatusFilter("Pendente"); setNotification(false); }}>Ver atas pendentes <ArrowRight size={14} /></button></div>}</div><div className="topbar-divider" /><button className="profile" onClick={() => navigate("settings")}><Avatar name="Ana Martins" /><span>Ana Martins<small>{role}</small></span><ChevronDown size={14} /></button></div></header>
     <main>
-      {onLock && <div className="access-session-row"><Button variant="ghost" size="sm" disabled={shared.saving} onClick={onLock}><LogOut size={14} />Sair</Button></div>}
       <CloudAccess workspace={shared} />
       <AnimatePresence mode="wait"><motion.div key={view} initial={{ opacity: 0, y: 7 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
       <div className="page-heading"><div><div className="eyebrow"><span /> SERVICE OPERATIONS · BRASIL</div><h1>{view === "dashboard" ? "Cada semana, uma direção." : names[view]}</h1><p>{view === "dashboard" ? "Seu planejamento conectado. Sua operação em movimento." : view === "minutes" ? "Um só lugar para planejar, registrar e compartilhar." : view === "parks" ? "Conheça os parques que movem a nossa operação." : view === "team" ? "Pessoas conectadas por uma operação mais eficiente." : view === "reports" ? "Transforme o histórico de planejamento em decisões." : view === "integrations" ? "Conecte seu planejamento ao ecossistema Microsoft e Azure." : "Preferências do workspace e segurança da operação."}</p></div><div className="heading-actions">{(view === "dashboard" || view === "minutes") && <><span className="today"><CalendarDays size={15} />29 out, 2026</span>{editable && <Button onClick={openNew}><Plus size={17} />Nova ata</Button>}</>}{view === "parks" && role === "Administrador" && <Button onClick={() => setParkEditor("new")}><Plus size={17} />Novo parque</Button>}</div></div>

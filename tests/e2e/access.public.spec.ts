@@ -1,23 +1,36 @@
 import { readFileSync } from "node:fs";
-import { test, expect, type Page, type BrowserContext } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import type { Minute, Park } from "../../apps/web/src/lib/domain";
 
-const admin = "00000000-0000-4000-8000-000000000001";
-const other = "00000000-0000-4000-8000-000000000002";
+const accessPassword = "senha-de-teste-e2e-123";
 const folderNames = [...readFileSync("database/supabase-public.sql", "utf8").split("unnest(ARRAY[")[1].split("]) WITH ORDINALITY")[0].matchAll(/'([^']+)'/g)].map(match => match[1]);
 const parks: Park[] = folderNames.map((name, index) => ({ id: `folder-${index}`, name, client: "", region: "", state: "", capacity: 0, manager: "", turbines: 0 }));
 
-async function authenticate(context: BrowserContext, userId = admin) {
-  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
-  const token = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ sub: userId, aud: "authenticated", exp: Math.floor(Date.now() / 1000) + 3600 })}.test-signature`;
-  const login = userId === admin ? "owner-login" : "visitor";
-  await context.addInitScript(({ id, accessToken, login }) => {
-    localStorage.setItem("sb-windplanner-test-auth-token", JSON.stringify({
-      access_token: accessToken, refresh_token: "test-refresh", token_type: "bearer",
-      expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
-      user: { id, aud: "authenticated", role: "authenticated", email: "owner@example.com", app_metadata: { provider: "github" }, user_metadata: {}, identities: [{ provider: "github", identity_data: { user_name: login } }], created_at: new Date().toISOString() }
-    }));
-  }, { id: userId, accessToken: token, login });
+function cloudMock() {
+  let state: { minutes: Minute[]; parks: Park[] } = { minutes: [], parks: structuredClone(parks) };
+  let revision = 1;
+  return async (page: Page, options: { offline?: boolean; saveFails?: boolean } = {}) => {
+    await page.route("https://windplanner-test.supabase.co/**", async route => {
+      const url = route.request().url();
+      const body = route.request().method() === "POST" ? route.request().postDataJSON() : null;
+      if (url.includes("/rpc/wp_load_workspace")) {
+        if (options.offline) { await route.fulfill({ status: 503, json: { message: "Offline" } }); return; }
+        if (body.access_password !== accessPassword) { await route.fulfill({ status: 401, json: { code: "42501", message: "Invalid access password" } }); return; }
+        await route.fulfill({ json: { data: state, revision } });
+      } else if (url.includes("/rpc/save_wp_workspace")) {
+        if (options.saveFails) { await route.fulfill({ status: 503, json: { message: "Offline" } }); return; }
+        if (body.access_password !== accessPassword) { await route.fulfill({ status: 401, json: { code: "42501", message: "Invalid access password" } }); return; }
+        expect(body.expected_revision).toBe(revision);
+        state = body.payload; revision++;
+        await route.fulfill({ json: revision });
+      } else await route.fulfill({ status: 404, json: { message: "Not found" } });
+    });
+  };
+}
+
+async function unlock(page: Page, password = accessPassword) {
+  await page.getByLabel("Senha de acesso").fill(password);
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
 }
 
 async function navigate(page: Page, name: string) {
@@ -25,39 +38,17 @@ async function navigate(page: Page, name: string) {
   await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name, exact: true }).click();
 }
 
-function cloudState() {
-  let state: { minutes: Minute[]; parks: Park[] } = { minutes: [], parks: structuredClone(parks) };
-  let revision = 1;
-  return async (page: Page, userId = admin, offline = false, saveFails = false) => {
-    await page.route("https://windplanner-test.supabase.co/**", async route => {
-      const url = route.request().url();
-      if (url.includes("/auth/v1/logout")) { await route.fulfill({ status: 204 }); return; }
-      if (url.includes("/auth/v1/user")) { await route.fulfill({ json: { id: userId, aud: "authenticated", role: "authenticated", email: "owner@example.com", app_metadata: { provider: "github" }, user_metadata: {}, identities: [{ provider: "github", identity_data: { user_name: userId === admin ? "owner-login" : "visitor" } }] } }); return; }
-      if (url.includes("/rpc/wp_is_admin")) { await route.fulfill({ json: userId === admin }); return; }
-      if (userId !== admin) { await route.fulfill({ status: 403, json: { message: "Not authorized" } }); return; }
-      if (url.includes("/rpc/save_wp_workspace")) {
-        if (saveFails) { await route.fulfill({ status: 503, json: { message: "Offline" } }); return; }
-        const input = route.request().postDataJSON();
-        expect(input.expected_revision).toBe(revision);
-        state = input.payload; revision++;
-        await route.fulfill({ json: revision });
-      } else if (url.includes("/rest/v1/wp_workspace")) {
-        await route.fulfill(offline ? { status: 503, json: { message: "Offline" } } : { json: { data: state, revision } });
-      } else await route.fulfill({ status: 403, json: { message: "Not authorized" } });
-    });
-  };
-}
-
-test("sem login não consulta a nuvem nem revela atas, mesmo contornando a antiga senha", async ({ page }) => {
+test("sem senha não consulta a nuvem nem revela atas, mesmo com dados locais no navegador", async ({ page }) => {
   const reads: string[] = [];
-  page.on("request", request => { if (request.url().includes("/rest/v1/wp_workspace")) reads.push(request.url()); });
+  page.on("request", request => { if (request.url().includes("/rpc/wp_load_workspace")) reads.push(request.url()); });
   await page.addInitScript(() => {
     sessionStorage.setItem("wind-planner-access-v1", "unlocked");
     localStorage.setItem("wind-planner-v1", JSON.stringify({ parks: [{ id: "local", name: "CONTEUDO LOCAL PRIVADO" }], minutes: [], role: "Administrador" }));
   });
+  await cloudMock()(page);
   await page.goto("./");
-  await expect(page.getByText("Acesso privado · conta responsável", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Entrar com GitHub", exact: true })).toBeVisible();
+  await expect(page.getByText("Acesso privado · senha compartilhada", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Senha de acesso")).toBeVisible();
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toHaveCount(0);
   await expect(page.locator(".topbar")).toHaveCount(0);
   await expect(page.getByText("CONTEUDO LOCAL PRIVADO")).toHaveCount(0);
@@ -65,27 +56,20 @@ test("sem login não consulta a nuvem nem revela atas, mesmo contornando a antig
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test("botão inicia login com GitHub pelo Supabase", async ({ page }) => {
-  await page.route("https://windplanner-test.supabase.co/**", route => route.fulfill({ status: 200, contentType: "text/html", body: "<html></html>" }));
+test("senha errada mostra erro e não libera as atas", async ({ page }) => {
+  await cloudMock()(page);
   await page.goto("./");
-  const authorize = page.waitForRequest(request => request.url().includes("/auth/v1/authorize") && request.url().includes("provider=github"));
-  await page.getByRole("button", { name: "Entrar com GitHub", exact: true }).click();
-  await authorize;
-});
-
-test("outra conta autenticada não tem acesso", async ({ page, context }) => {
-  await authenticate(context, other);
-  await cloudState()(page, other);
-  await page.goto("./");
-  await expect(page.getByText("Esta conta do GitHub não está autorizada a acessar as atas.", { exact: true })).toBeVisible();
+  await unlock(page, "senha-errada-123");
+  await expect(page.locator("#login-error")).toContainText("Senha incorreta. Tente novamente.");
   await expect(page.locator(".topbar")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toHaveCount(0);
 });
 
-test("conta responsável cria uma ata na pasta e a recupera em outra sessão", async ({ page, context, browser }) => {
-  const mock = cloudState();
-  await authenticate(context); await mock(page);
+test("senha correta libera as pastas, cria uma ata e a recupera em outra sessão", async ({ page, browser }) => {
+  const mock = cloudMock();
+  await mock(page);
   await page.goto("./");
+  await unlock(page);
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Nova ata", exact: true }).click();
   const dialog = page.getByRole("dialog");
@@ -96,18 +80,19 @@ test("conta responsável cria uma ata na pasta e a recupera em outra sessão", a
   await expect(page.getByText(/Atas privadas na nuvem · revisão 2/)).toBeVisible();
   const second = await browser.newContext();
   try {
-    await authenticate(second);
     const secondPage = await second.newPage(); await mock(secondPage);
     await secondPage.goto("http://127.0.0.1:3100/Ata_Prog_Semanal/");
+    await unlock(secondPage);
     await expect(secondPage.locator(".table-title")).toContainText("Vilas IV");
     await secondPage.locator(".table-title").click();
     await expect(secondPage.getByLabel("Participantes *")).toHaveValue("Equipe de planejamento");
   } finally { await second.close(); }
 });
 
-test("pasta abre histórico filtrado e permite criar ata", async ({ page, context }) => {
-  await authenticate(context); await cloudState()(page);
+test("pasta abre histórico filtrado e permite criar ata", async ({ page }) => {
+  await cloudMock()(page);
   await page.goto("./");
+  await unlock(page);
   await expect(page.locator(".topbar")).toBeVisible();
   await navigate(page, "Parques eólicos");
   await expect(page.locator(".park-card")).toHaveCount(54);
@@ -117,27 +102,30 @@ test("pasta abre histórico filtrado e permite criar ata", async ({ page, contex
   await expect(page.getByLabel("Parque eólico *")).toHaveValue(parks[53].id);
 });
 
-test("sair remove o workspace privado da tela", async ({ page, context }) => {
-  await authenticate(context); await cloudState()(page);
+test("sair remove o workspace privado da tela", async ({ page }) => {
+  await cloudMock()(page);
   await page.goto("./");
+  await unlock(page);
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Sair", exact: true }).click();
-  await expect(page.getByText("Acesso privado · conta responsável", { exact: true })).toBeVisible();
+  await expect(page.getByText("Acesso privado · senha compartilhada", { exact: true })).toBeVisible();
   await expect(page.locator(".topbar")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toHaveCount(0);
 });
 
-test("falha de nuvem não libera criação nem demonstração local", async ({ page, context }) => {
-  await authenticate(context); await cloudState()(page, admin, true);
+test("falha de nuvem ao ler não libera criação nem demonstração local", async ({ page }) => {
+  await cloudMock()(page, { offline: true });
   await page.goto("./");
-  await expect(page.getByText(/Não foi possível ler a nuvem/)).toBeVisible({ timeout: 20000 });
+  await unlock(page);
+  await expect(page.locator("#login-error")).toContainText("Não foi possível ler a nuvem", { timeout: 20000 });
   await expect(page.locator(".topbar")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toHaveCount(0);
 });
 
-test("falha de salvamento é explícita e preserva o rascunho para exportar", async ({ page, context }) => {
-  await authenticate(context); await cloudState()(page, admin, false, true);
+test("falha de salvamento é explícita e preserva o rascunho para exportar", async ({ page }) => {
+  await cloudMock()(page, { saveFails: true });
   await page.goto("./");
+  await unlock(page);
   await page.getByRole("button", { name: "Nova ata", exact: true }).click();
   await page.getByRole("dialog").getByLabel("Participantes *").fill("Equipe de planejamento");
   await page.getByRole("button", { name: "Salvar rascunho", exact: true }).click();

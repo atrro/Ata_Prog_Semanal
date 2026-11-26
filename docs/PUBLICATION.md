@@ -1,45 +1,35 @@
 # Publicação com Atas Privadas
 
 GitHub Pages hospeda somente a interface em `https://atrro.github.io/Ata_Prog_Semanal/`.
-Supabase armazena atas, anexos e pastas. **Somente a conta GitHub responsável pode ler e alterar
-esses dados**, mediante login com GitHub (OAuth) pelo Supabase Auth. Não existe consulta anônima,
-e a senha da conta GitHub nunca é informada ao app.
+Supabase armazena atas, anexos e pastas. **Somente quem informar a senha de acesso compartilhada
+consegue ler ou alterar esses dados.** A senha é verificada no banco (hash bcrypt em `wp_access`)
+por funções RPC; não há login por conta GitHub, e a senha não fica no código nem no navegador.
+Leitura anônima direta às tabelas é bloqueada por RLS.
 O modo local sem variáveis de nuvem continua demonstrativo e independente da API NestJS.
 
 ## Configuração do Supabase
 
 1. Crie ou abra o projeto em https://supabase.com/dashboard.
-2. Em GitHub, crie um OAuth App (Settings > Developer settings > OAuth Apps) com
-   **Authorization callback URL** `https://<project-ref>.supabase.co/auth/v1/callback`.
-   Em Supabase, Authentication > Sign In / Providers > GitHub, ative o provedor e informe o
-   Client ID e o Client Secret do OAuth App. Esses segredos ficam somente nos painéis do GitHub
-   e do Supabase; não os envie ao assistente nem ao repositório.
-3. Execute `database/supabase-public.sql` por completo. Apesar do nome legado, o script
-   configura **acesso privado**. Pode ser reaplicado em projetos que usavam leitura pública:
-   remove a política pública, revoga leitura anônima e restringe a leitura à conta responsável.
-   O índice `wp_single_admin` impede cadastrar uma segunda conta responsável, inclusive pelo
-   SQL Editor.
-4. Para configurar a única conta responsável, informe o nome de usuário do GitHub em minúsculas:
+2. Execute `database/supabase-public.sql` por completo no SQL Editor. O script cria a tabela
+   `wp_access`, as funções `wp_load_workspace`, `wp_set_access_password` e `save_wp_workspace`,
+   e revoga leitura e escrita diretas para `anon` e `authenticated`. Pode ser reaplicado em
+   projetos que usavam a versão anterior.
+3. Defina a senha de acesso (mínimo de 12 caracteres). Substitua o marcador pela senha escolhida
+   no momento; ela não deve ser gravada no repositório nem em arquivos de documentação:
 
 ```sql
-BEGIN;
-DELETE FROM public.wp_admins;
-INSERT INTO public.wp_admins(github_login) VALUES('atrro');
-COMMIT;
+select public.wp_set_access_password('<senha-de-acesso>');
 ```
 
-O login é o nome de usuário do GitHub, não e-mail nem nome de exibição. A permissão vale somente
-para a identidade GitHub vinculada à conta autenticada no Supabase; e-mail e metadados editáveis
-não concedem acesso. O `DELETE` substitui o responsável anterior; não exclui usuários nem atas.
-Não envie senhas, tokens ou chaves privadas ao assistente.
+Para trocar a senha depois, execute a mesma função com a nova senha. A função só roda no SQL
+Editor (o papel `postgres`); clientes `anon` e `authenticated` não podem alterá-la.
 
-5. O mesmo script cria as **54 pastas** com os nomes fornecidos, preservando maiúsculas,
+4. O mesmo script cria as **54 pastas** com os nomes fornecidos, preservando maiúsculas,
    acentos e nomes completos. Não duplica pastas existentes com o mesmo nome nem remove atas.
    Faça backup antes de atualizar um projeto existente e feche sessões de edição durante a migração.
 6. Em Authentication > URL Configuration, configure Site URL e Redirect URL como
    `https://atrro.github.io/Ata_Prog_Semanal/`.
-7. Em Authentication > Sign In / Providers, mantenha somente o provedor GitHub habilitado se não
-   houver outro uso do projeto. Mesmo com login aberto, contas sem permissão não leem nem gravam dados.
+5. Não é necessário configurar Authentication, OAuth ou provedores de login: o acesso é apenas pela senha.
 
 ## Publicação da Interface
 
@@ -64,10 +54,9 @@ estivessem na nuvem. A configuração do projeto Supabase exige acesso administr
 
 ## Entrar, Criar e Consultar
 
-Abra o site e clique em **Entrar com GitHub**. Autorize o OAuth App quando solicitado.
-Depois da validação da sessão e das permissões, o workspace abre com o botão **Nova ata**,
-no painel e em Atas semanais. Uma conta GitHub sem permissão vê a mensagem de acesso não autorizado.
-A antiga senha compartilhada não concede acesso ao workspace na nuvem.
+Abra o site, informe a senha de acesso e clique em **Entrar**. Senha incorreta mostra
+"Senha incorreta. Tente novamente." e não libera nenhuma ata. Com a senha correta, o workspace
+abre com o botão **Nova ata**, no painel e em Atas semanais.
 
 As pastas são os registros em **Parques eólicos**. Cada ata pertence à pasta selecionada no
 campo **Parque eólico** (`parkId`); seus anexos ficam associados à mesma ata.
@@ -80,8 +69,8 @@ Outra sessão da mesma conta recupera os registros salvos. Em erro de salvamento
 as alterações antes de recarregar; logout é bloqueado enquanto há mudanças não publicadas.
 Uma sessão encerrada remove os dados privados da tela.
 
-Verifique também em janela anônima: somente a tela de login com GitHub deve aparecer,
-sem atas nem botão de criação. Outra conta GitHub autenticada não deve ler o workspace ou histórico.
+Verifique também em janela anônima: somente a tela de senha deve aparecer, sem atas nem botão
+de criação. Sem a senha correta, o histórico não é lido.
 
 ## Armazenamento e Limites
 
@@ -97,5 +86,5 @@ Para grandes históricos, use tabelas por entidade e Storage privado com políti
 Backups, quotas, recuperação e autorização corporativa do uso do serviço devem ser administrados
 pelo responsável. Não há promessa de armazenamento gratuito ilimitado.
 
-Envio de atas por e-mail permanece simulado. Login GitHub é o único acesso ao workspace privado.
+Envio de atas por e-mail permanece simulado. A senha compartilhada é o único acesso ao workspace privado.
 O backend NestJS e suas integrações corporativas continuam independentes.
