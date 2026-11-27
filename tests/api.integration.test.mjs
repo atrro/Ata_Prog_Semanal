@@ -12,7 +12,7 @@ const request = async (path, method = "GET", body, headers = {}) => {
 test("API com PostgreSQL: concorrência, isolamento, auditoria e distribuição", async context => {
   let minute;
   const checklist = ["Técnicos em férias", "Técnicos em treinamento", "Técnicos indisponíveis", "Conferência climática", "Ferramentas disponíveis", "Materiais disponíveis", "Backlog revisado", "CMS Overdue", "VTM Overdue", "Breakdowns", "Capacity Levelling", "Programação do Cliente", "Feriados da semana"];
-  const input = { parkId: "00000000-0000-4000-8000-000000000003", week: 44, date: "2026-10-29", territory: "Nordeste", dispatcher: "Integração Automatizada", participants: "Supervisor: Teste", checklist, sections: [{ title: "Programação", content: "<p>Manutenção preventiva</p>" }], links: [] };
+  const input = { parkId: "00000000-0000-4000-8000-000000000003", week: 44, date: "2026-10-29", dispatcher: "Integração Automatizada", participants: "Supervisor: Teste", checklist, sections: [{ title: "Programação", content: "<p>Manutenção preventiva</p>" }], links: [] };
   try {
     await context.test("health readiness", async () => assert.equal((await request("/health/ready")).status, 200));
     await context.test("cria ata auditada", async () => { const result = await request("/minutes", "POST", input); assert.equal(result.status, 201); minute = result.body; assert.equal(minute.version, 1); });

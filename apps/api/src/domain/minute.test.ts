@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { allowedFile, checklist, fileMatches, isReady, listInput, minuteInput, sendInput } from "./minute";
 
-const valid = { parkId: "00000000-0000-4000-8000-000000000001", week: 44, date: "2026-10-29", territory: "Nordeste", dispatcher: "Ana Martins", participants: "Supervisor: Ricardo", checklist: [...checklist], sections: [{ title: "Programação", content: "<p>Revisão preventiva</p>" }], links: [] };
+const valid = { parkId: "00000000-0000-4000-8000-000000000001", week: 44, date: "2026-10-29", dispatcher: "Ana Martins", participants: "Supervisor: Ricardo", checklist: [...checklist], sections: [{ title: "Programação", content: "<p>Revisão preventiva</p>" }], links: [] };
 test("valida ata e exige os 13 itens para envio", () => { const data = minuteInput.parse(valid); assert.ok(isReady(data)); assert.equal(isReady({ ...data, checklist: checklist.slice(1) }), false); });
 test("rejeita checklist duplicado e datas inválidas", () => { assert.equal(minuteInput.safeParse({ ...valid, checklist: [checklist[0], checklist[0]] }).success, false); assert.equal(minuteInput.safeParse({ ...valid, date: "2026-02-31" }).success, false); });
 test("rejeita links executáveis e propriedades não autorizadas", () => { assert.equal(minuteInput.safeParse({ ...valid, companyId: "other" }).success, false); assert.equal(minuteInput.safeParse({ ...valid, links: [{ title: "Teste", url: "javascript:alert(1)" }] }).success, false); });

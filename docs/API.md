@@ -58,7 +58,6 @@ Não enviar empresa/ID/timestamps. Parque com qualquer histórico de atas não p
   "parkId": "00000000-0000-4000-8000-000000000003",
   "week": 44,
   "date": "2026-10-29",
-  "territory": "Nordeste",
   "dispatcher": "Ana Martins",
   "participants": "Supervisor: Ricardo\nPlanejador: Ana",
   "checklist": ["Conferência climática", "Backlog revisado"],

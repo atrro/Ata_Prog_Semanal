@@ -10,7 +10,7 @@ export function generatePdf(minute: MinuteRecord, parkName: string, attachments:
     pdf.fontSize(9).fillColor("#7890A0").text("Vestas Brasil | One Standard. One Process. One Voice.").moveDown();
     const heading = (value: string) => { pdf.moveDown(.8).fillColor("#005A8D").font("Helvetica-Bold").fontSize(12).text(value).moveDown(.4); pdf.fillColor("#283746").font("Helvetica").fontSize(10); };
     heading("ATA DE PROGRAMAÇÃO SEMANAL");
-    pdf.text(`${parkName} | Semana ${minute.week} | ${minute.data.date}`).text(`Dispatcher: ${minute.dispatcher} | Território: ${minute.data.territory} | Versão: ${minute.version}`);
+    pdf.text(`${parkName} | Semana ${minute.week} | ${minute.data.date}`).text(`Dispatcher: ${minute.dispatcher} | Versão: ${minute.version}`);
     heading("Participantes"); pdf.text(minute.data.participants);
     heading("Checklist de planejamento"); checklist.forEach(item => pdf.text(`${minute.data.checklist.includes(item) ? "[x]" : "[ ]"} ${item}`));
     for (const section of minute.data.sections) { const content = section.content.replace(/<\/(p|li|h[1-6])>/gi, "\n").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&"); if (content.trim()) { heading(section.title); pdf.text(content); } }

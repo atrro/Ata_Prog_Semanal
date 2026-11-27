@@ -6,7 +6,7 @@ export type Role = typeof roles[number];
 export type Actor = { companyId: string; id: string; name: string; role: Role };
 export const minuteInput = z.object({
   parkId: z.uuid(), week: z.number().int().min(1).max(53), date: z.iso.date(),
-  territory: z.string().trim().min(2).max(100), dispatcher: z.string().trim().min(3).max(200),
+  dispatcher: z.string().trim().min(3).max(200),
   participants: z.string().trim().min(3).max(20000),
   checklist: z.array(z.enum(checklist as [string, ...string[]])).max(13).refine(items => new Set(items).size === items.length, "Checklist duplicado"),
   sections: z.array(z.object({ title: z.string().trim().min(1).max(200), content: z.string().max(100000) })).max(250),

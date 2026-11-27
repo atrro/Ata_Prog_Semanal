@@ -49,7 +49,7 @@ test("envio exige conclusão e informa simulação", async ({ page }) => {
   await page.getByLabel("Status da ata").selectOption("Enviada");
   await page.locator(".actions-menu summary").first().click();
   await page.getByRole("button", { name: "Reenviar e-mail", exact: true }).first().click();
-  await expect(dialog).toContainText("Abre um rascunho no Outlook");
+  await expect(page.getByRole("dialog")).toContainText("Abre um rascunho no Outlook");
   await page.getByLabel("Destinatários", { exact: false }).fill("teste@example.com");
   await page.getByRole("button", { name: "Registrar envio", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Envio registrado para teste@example.com");
