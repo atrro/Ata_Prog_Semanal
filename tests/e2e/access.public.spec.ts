@@ -108,6 +108,7 @@ test("sair remove o workspace privado da tela", async ({ page }) => {
   await unlock(page);
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await expect(page.getByLabel("Senha de acesso")).toBeVisible();
   await expect(page.getByText("Acesso privado · senha compartilhada", { exact: true })).toHaveCount(0);
   await expect(page.locator(".topbar")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toHaveCount(0);
