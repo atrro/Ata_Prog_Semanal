@@ -20,12 +20,12 @@ test("cria ata, revisa checklist, salva e persiste", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Nova ata", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel(/^Participantes/).fill("Supervisor: João\nLíder Técnico: Maria\nStock Keeper: Pedro\nPlanejador: Ana");
+  await expect(dialog.getByLabel(/^Participantes/)).toHaveValue(/Supervisor:/);
+  await dialog.getByRole("tab", { name: "Conteúdo", exact: true }).click();
+  await dialog.locator(".tiptap").fill("Manutenção preventiva das turbinas 01 a 04. Revisão de materiais concluída.");
   await dialog.getByRole("tab", { name: "Checklist" }).click();
   await dialog.getByRole("button", { name: "Marcar todos como revisados" }).click();
   await expect(dialog.getByText("13 de 13", { exact: true })).toBeVisible();
-  await dialog.getByRole("tab", { name: "Conteúdo", exact: true }).click();
-  await dialog.locator(".tiptap").fill("Manutenção preventiva das turbinas 01 a 04. Revisão de materiais concluída.");
   await dialog.getByRole("button", { name: "Salvar rascunho" }).click();
   await expect(page.getByRole("status")).toContainText("Ata salva");
   await page.reload();
@@ -49,10 +49,10 @@ test("envio exige conclusão e informa simulação", async ({ page }) => {
   await page.getByLabel("Status da ata").selectOption("Enviada");
   await page.locator(".actions-menu summary").first().click();
   await page.getByRole("button", { name: "Reenviar e-mail", exact: true }).first().click();
-  await expect(page.getByRole("dialog")).toContainText("Nenhuma mensagem real será enviada");
+  await expect(dialog).toContainText("Abre um rascunho no Outlook");
   await page.getByLabel("Destinatários", { exact: false }).fill("teste@example.com");
-  await page.getByRole("button", { name: "Simular envio", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("Nenhum e-mail real foi enviado");
+  await page.getByRole("button", { name: "Registrar envio", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Envio registrado para teste@example.com");
 });
 test("tema persiste e perfil leitor restringe edição", async ({ page }) => {
   await page.goto("/");

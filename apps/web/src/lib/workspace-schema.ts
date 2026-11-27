@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const parkSchema = z.object({ id: z.string().min(1), name: z.string(), client: z.string(), region: z.string(), state: z.string(), capacity: z.number(), manager: z.string(), turbines: z.number() });
 const minuteSchema = z.object({
-  id: z.string().min(1), parkId: z.string(), week: z.number().int().min(1).max(53), date: z.string(), territory: z.string(), dispatcher: z.string(), participants: z.string(),
+  id: z.string().min(1), parkId: z.string(), week: z.number().int().min(1).max(53), date: z.string(), dispatcher: z.string(), participants: z.string(),
   status: z.enum(["Enviada", "Pendente", "Rascunho"]), checklist: z.array(z.string()),
   sections: z.array(z.object({ title: z.string(), content: z.string() })),
   links: z.array(z.object({ title: z.string(), url: z.url().refine(value => /^https?:\/\//i.test(value)) })),

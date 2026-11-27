@@ -6,7 +6,6 @@ CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 -- Remove the GitHub-account model from earlier versions.
-DROP POLICY IF EXISTS admin_self_read ON public.wp_admins;
 DROP TABLE IF EXISTS public.wp_admins;
 DROP FUNCTION IF EXISTS public.wp_is_admin();
 
