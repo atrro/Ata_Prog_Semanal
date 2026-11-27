@@ -22,7 +22,7 @@ async function imageToDataUrl(file: File) {
   context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
   const png = canvas.toDataURL("image/png");
-  if (png.length <= MAX_IMAGE_CHARS / 2) return png;
+  if (png.length <= MAX_IMAGE_CHARS / 2) return { src: png, width: canvas.width, height: canvas.height };
   // JPEG não tem transparência; o fundo branco evita áreas pretas.
   const flat = document.createElement("canvas");
   flat.width = canvas.width; flat.height = canvas.height;
@@ -31,7 +31,7 @@ async function imageToDataUrl(file: File) {
   flatContext.fillStyle = "#fff"; flatContext.fillRect(0, 0, flat.width, flat.height); flatContext.drawImage(canvas, 0, 0);
   for (const quality of [0.85, 0.7, 0.5]) {
     const jpeg = flat.toDataURL("image/jpeg", quality);
-    if (jpeg.length <= MAX_IMAGE_CHARS) return jpeg;
+    if (jpeg.length <= MAX_IMAGE_CHARS) return { src: jpeg, width: flat.width, height: flat.height };
   }
   throw new Error("size");
 }
@@ -52,8 +52,8 @@ export function RichEditor({ value, onChange, readOnly = false }: { value: strin
         void (async () => {
           for (const file of files) {
             try {
-              const src = await imageToDataUrl(file);
-              view.dispatch(view.state.tr.replaceSelectionWith(view.state.schema.nodes.image.create({ src, alt: "Imagem colada" })).scrollIntoView());
+              const { src, width, height } = await imageToDataUrl(file);
+              view.dispatch(view.state.tr.replaceSelectionWith(view.state.schema.nodes.image.create({ src, width, height, alt: "Imagem colada" })).scrollIntoView());
             } catch (failure) {
               showNotice(failure instanceof Error && failure.message === "size" ? "A imagem é grande demais, mesmo comprimida. Use uma imagem menor." : "Não foi possível colar a imagem.");
             }

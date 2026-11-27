@@ -64,7 +64,7 @@ campo **Parque eólico** (`parkId`); seus anexos ficam associados à mesma ata.
 Cliente, estado, gestor e capacidades ficam vazios/zero até serem informados pelo responsável,
 sem dados operacionais fictícios. É possível complementar as pastas e cadastrar outras.
 
-Salve e aguarde **Atas privadas na nuvem · revisão N** antes de sair.
+Salve e aguarde o aviso de erro, se houver, antes de sair.
 Outra sessão da mesma conta recupera os registros salvos. Em erro de salvamento, exporte
 as alterações antes de recarregar; logout é bloqueado enquanto há mudanças não publicadas.
 Uma sessão encerrada remove os dados privados da tela.
@@ -81,10 +81,11 @@ como um arquivo separado. Não há importação automática de dados antigos do 
 
 O documento completo tem limite de 20 MB; cada anexo tem limite de 2 MB na interface.
 Histórico privado e controle de revisão evitam sobrescrita silenciosa por outra sessão.
-Atualizar consulta a versão corrente; não há sincronização por websocket.
+Para consultar a versão corrente, recarregue a página e entre novamente; não há sincronização por websocket.
 Para grandes históricos, use tabelas por entidade e Storage privado com políticas próprias.
 Backups, quotas, recuperação e autorização corporativa do uso do serviço devem ser administrados
 pelo responsável. Não há promessa de armazenamento gratuito ilimitado.
 
-Envio de atas por e-mail permanece simulado. A senha compartilhada é o único acesso ao workspace privado.
+O app não envia e-mails: **Revisar e enviar** gera um rascunho `.eml` para o Outlook do usuário. A senha compartilhada é o único acesso ao workspace privado.
+Imagem de fundo do login: "V90-2MW Pujalt Wind Farm in Spain 2021", Mrb-Wind, Wikimedia Commons, CC BY-SA 4.0.
 O backend NestJS e suas integrações corporativas continuam independentes.

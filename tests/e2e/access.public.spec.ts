@@ -1,10 +1,8 @@
-import { readFileSync } from "node:fs";
 import { test, expect, type Page } from "@playwright/test";
-import type { Minute, Park } from "../../apps/web/src/lib/domain";
+import { parksSeed, type Minute, type Park } from "../../apps/web/src/lib/domain";
 
 const accessPassword = "senha-de-teste-e2e-123";
-const folderNames = [...readFileSync("database/supabase-public.sql", "utf8").split("unnest(ARRAY[")[1].split("]) WITH ORDINALITY")[0].matchAll(/'([^']+)'/g)].map(match => match[1]);
-const parks: Park[] = folderNames.map((name, index) => ({ id: `folder-${index}`, name, client: "", region: "", state: "", capacity: 0, manager: "", turbines: 0 }));
+const parks: Park[] = parksSeed;
 
 function cloudMock() {
   let state: { minutes: Minute[]; parks: Park[] } = { minutes: [], parks: structuredClone(parks) };
@@ -75,9 +73,12 @@ test("senha correta libera as pastas, cria uma ata e a recupera em outra sessão
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("Parque eólico *").locator("option")).toHaveCount(54);
   await dialog.getByLabel("Parque eólico *").selectOption({ label: "Vilas IV" });
+  await dialog.getByLabel(/^Dispatcher/).fill("ATRRO");
   await dialog.getByLabel("Participantes *").fill("Equipe de planejamento");
+  const saved = page.waitForResponse(response => response.url().includes("/rpc/save_wp_workspace"));
   await dialog.getByRole("button", { name: "Salvar rascunho", exact: true }).click();
-  await expect(page.getByText(/Atas privadas na nuvem · revisão 2/)).toBeVisible();
+  expect((await saved).ok()).toBe(true);
+  await expect(page.getByText("Atas privadas na nuvem")).toHaveCount(0);
   const second = await browser.newContext();
   try {
     const secondPage = await second.newPage(); await mock(secondPage);
@@ -95,11 +96,11 @@ test("pasta abre histórico filtrado e permite criar ata", async ({ page }) => {
   await unlock(page);
   await expect(page.locator(".topbar")).toBeVisible();
   await navigate(page, "Parques eólicos");
-  await expect(page.locator(".park-card")).toHaveCount(54);
-  await page.locator(".park-card").filter({ has: page.getByRole("heading", { name: "Vilas IV", exact: true }) }).getByRole("button", { name: "Consultar atas" }).click();
+  await expect(page.locator(".parks-table tbody tr")).toHaveCount(54);
+  await page.locator(".parks-table tbody tr").filter({ hasText: "Vilas IV" }).last().getByRole("button", { name: /Consultar atas/ }).click();
   await expect(page.getByRole("button", { name: "Nova ata", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Nova ata", exact: true }).click();
-  await expect(page.getByLabel("Parque eólico *")).toHaveValue(parks[53].id);
+  await expect(page.getByLabel("Parque eólico *")).toHaveValue(parks[20].id);
 });
 
 test("sair remove o workspace privado da tela", async ({ page }) => {
@@ -128,10 +129,11 @@ test("falha de salvamento é explícita e preserva o rascunho para exportar", as
   await page.goto("./");
   await unlock(page);
   await page.getByRole("button", { name: "Nova ata", exact: true }).click();
+  await page.getByRole("dialog").getByLabel(/^Dispatcher/).fill("ATRRO");
   await page.getByRole("dialog").getByLabel("Participantes *").fill("Equipe de planejamento");
   await page.getByRole("button", { name: "Salvar rascunho", exact: true }).click();
   await expect(page.getByText(/Não foi possível salvar na nuvem/)).toBeVisible({ timeout: 20000 });
-  await expect(page.locator(".table-title")).toContainText("Alegria");
+  await expect(page.locator(".table-title")).toContainText("Angicos");
   await page.getByRole("button", { name: "Sair", exact: true }).click();
   await expect(page.getByText(/Existem alterações não publicadas/)).toBeVisible();
   const download = page.waitForEvent("download");

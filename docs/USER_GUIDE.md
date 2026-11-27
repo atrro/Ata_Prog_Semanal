@@ -4,17 +4,16 @@
 
 Site publicado no GitHub Pages: informe a **senha de acesso** e clique em **Entrar**.
 A senha é verificada no servidor do Supabase; o site não guarda a senha.
-Atas e anexos são salvos no Supabase privado. Aguarde a confirmação da
-revisão; em conflito ou falha, exporte suas alterações antes de atualizar/sair.
-Use **Sair** ao terminar, principalmente em computadores compartilhados.
+Atas e anexos são salvos no Supabase privado. Em falha de salvamento aparece um aviso; use o ícone
+de download no topo para exportar um backup JSON antes de sair.
+Use o ícone **Sair** no topo ao terminar, principalmente em computadores compartilhados.
 Veja [Publicação e nuvem](PUBLICATION.md) para configuração e limites.
 
 No site publicado, informe a senha de acesso e clique em **Entrar**.
 Depois de autenticar, **Nova ata** fica disponível no painel e em Atas semanais.
 As 54 pastas pré-criadas aparecem em **Parques eólicos**; selecione a pasta no campo
 **Parque eólico** da ata. **Consultar atas** filtra o histórico por pasta e a seleciona
-ao criar uma ata. Atas e anexos ficam privados na nuvem Supabase; aguarde a confirmação
-da revisão antes de sair. Outras contas e visitantes não têm acesso.
+ao criar uma ata. Atas e anexos ficam privados na nuvem Supabase. Outras contas e visitantes não têm acesso.
 Veja a configuração e os limites em [Publicação](PUBLICATION.md).
 
 As orientações sobre dados fictícios, perfis e armazenamento local abaixo se aplicam
@@ -31,10 +30,12 @@ Clique no gráfico de parque para consultar suas atas. Sino abre pendências, lu
 ## Criar e Revisar
 
 1. Clique em Nova ata.
-2. Preencha parque, território, semana, data, dispatcher e participantes.
+2. Preencha parque, ano, semana, data, dispatcher (suas iniciais) e participantes.
+   Para repetir o planejamento anterior, use **Iniciar a partir da última ata**: carrega participantes,
+   dispatcher, conteúdo, links e anexos da última ata do parque, avança a semana e deixa o checklist para refazer.
 3. Identifique supervisor, líder técnico, stock keeper, planejador e demais participantes.
 4. Revise e marque os 13 itens do Checklist, inclusive os sem ocorrência após conferência.
-5. Em Conteúdo, selecione seção e preencha com negrito, itálico ou listas quando útil.
+5. Em Conteúdo, selecione seção e preencha com negrito, itálico, listas e tabelas. Cole imagens com Ctrl+V.
 6. Acrescente blocos por nome para Segurança, Logística, Cliente ou outros temas.
 7. Inclua Anexos e links.
 8. Salve rascunho para continuar depois ou use Revisar e enviar.
@@ -51,22 +52,25 @@ Links exigem título e endereço HTTP/HTTPS e abrem no serviço original, sujeit
 
 ## Enviar e Exportar
 
-Revisar e enviar abre pré-visualização. Informe destinatários por vírgula e confira assunto, corpo e anexos.
-**Simular envio não envia e-mails reais**: registra somente um evento local.
-A API suporta envio real após implantação/configuração, mas a interface não está conectada a ela nesta versão.
-Download da tabela ou Exportar PDF no detalhe gera documento multipágina com participantes, checklist,
-seções, links, nomes/versões dos anexos, identificador e data/hora. Arquivos não ficam embutidos no PDF.
+**Revisar e enviar** salva a ata e gera um rascunho de e-mail (arquivo `.eml`) com a ata completa em HTML
+no corpo (imagens incluídas), o PDF da ata e os anexos do app. Abra o arquivo baixado no Outlook para
+revisar, informar os destinatários e enviar. O Outlook novo e o Outlook na web não abrem `.eml` como rascunho:
+use o menu da linha > **Enviar ata** > **Outlook Web**, que copia o corpo, baixa os arquivos e abre o e-mail
+(cole com Ctrl+V e anexe os arquivos baixados). O envio é feito por você no Outlook; o app não envia e-mails.
+**Exportar HTML** (menu da linha ou detalhe) baixa a ata com todas as informações e imagens, e
+**Copiar para e-mail** copia o mesmo conteúdo para colar no corpo de qualquer e-mail.
+**Exportar PDF** gera o documento no padrão Vestas (cabeçalho, participantes, seções com imagens,
+checklist, links e anexos); anexos em PNG/JPG aparecem no PDF e os demais são listados.
 
 ## Histórico e Parques
 
-Atas semanais: pesquisa e filtros de parque/status; Filtros abre semana, dispatcher, região e datas.
-Menu da linha: visualizar, editar, duplicar, enviar/reenviar e excluir conforme perfil.
+Atas semanais: pesquisa e filtros de parque/status; Filtros abre semana, dispatcher e datas.
+Menu da linha: visualizar, exportar HTML, copiar para e-mail, editar, duplicar, enviar/reenviar e excluir conforme perfil.
 Duplicação cria rascunho; revise semana/data/conteúdo antes de compartilhar.
 Exclusão demo é local e definitiva; API usa exclusão lógica com auditoria.
 
-Parques eólicos: consulte cliente, capacidade, aerogeradores, região e gestor.
-Administrador cadastra/edita; parques com atas vinculadas não podem ser excluídos.
-Consultar atas abre histórico filtrado.
+Parques eólicos: lista com estado, modelo de turbina, aerogeradores e quantidade de atas.
+**Consultar atas** abre o histórico filtrado do parque.
 
 ## Equipe, Relatórios e Configurações
 

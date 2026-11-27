@@ -17,6 +17,11 @@ export type MinuteFields = z.infer<typeof minuteSchema>;
 export const stripHtml = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 export const hasContent = (html: string) => stripHtml(html).length > 0 || /<(img|table)\b/i.test(html);
 export function canSend(minute: Minute) { return checklistLabels.every(label => minute.checklist.includes(label)) && minute.sections.some(section => hasContent(section.content)) && minute.participants.trim().length > 0; }
+export const formatDateBr = (date: string) => /^\d{4}-\d{2}-\d{2}/.test(date) ? `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}` : date;
+export function lastMinuteOf(minutes: Minute[], parkId: string) {
+  return minutes.filter(minute => minute.parkId === parkId).sort((a, b) => b.year - a.year || b.week - a.week || b.date.localeCompare(a.date))[0];
+}
+export const nextWeekOf = (minute: Pick<Minute, "year" | "week">) => minute.week >= 53 ? { year: minute.year + 1, week: 1 } : { year: minute.year, week: minute.week + 1 };
 export function nextVersion(minute: Minute, actor: string, action: string): Minute {
   const version = minute.version + 1;
   return { ...minute, version, audit: [...minute.audit, { version, actor, date: new Date().toISOString(), action }] };

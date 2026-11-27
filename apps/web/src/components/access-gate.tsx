@@ -5,7 +5,6 @@ import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole } from "lucide-react";
 import { Button } from "./ui/button";
 import { Workspace } from "./workspace";
 import { useSharedWorkspace } from "@/lib/shared-workspace";
-import { CloudAccess } from "./cloud-access";
 
 function PasswordForm({ onSubmit }: { onSubmit: (password: string) => Promise<string> }) {
   const [password, setPassword] = useState("");
@@ -40,7 +39,7 @@ export function AccessGate() {
   if (workspace.ready) return <Workspace shared={workspace} />;
 
   return <main className="login-page">
-    <div className="login-background" />
+    <div className="login-background" style={{ "--login-image": `url(${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/login-vestas-turbine.jpg)` } as React.CSSProperties} />
     <section className="login-panel" aria-labelledby="private-login-title">
       <span className="login-icon"><LockKeyhole size={23} /></span>
       <h1 id="private-login-title">Wind Planner</h1>
@@ -49,7 +48,7 @@ export function AccessGate() {
         try { await workspace.unlock(password); return ""; }
         catch (failure) { return failure instanceof Error ? failure.message : "Não foi possível entrar. Tente novamente."; }
       }} />
-      <CloudAccess workspace={workspace} />
     </section>
+    <footer className="login-footer"><span>One Standard. One Process. One Voice.</span><span>Foto: Mrb-Wind, <a href="https://commons.wikimedia.org/wiki/File:V90-2MW_Pujalt_Wind_Farm_in_Spain_2021.jpg" target="_blank" rel="noreferrer">Wikimedia Commons</a>, CC BY-SA 4.0</span></footer>
   </main>;
 }

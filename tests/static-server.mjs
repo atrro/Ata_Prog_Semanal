@@ -4,7 +4,7 @@ import { extname, resolve, sep } from "node:path";
 
 const root = resolve("apps/web/out");
 const base = "/Ata_Prog_Semanal/";
-const types = { ".html": "text/html; charset=utf-8", ".js": "application/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".txt": "text/plain" };
+const types = { ".html": "text/html; charset=utf-8", ".js": "application/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".woff2": "font/woff2", ".txt": "text/plain" };
 createServer(async (request, response) => {
   try {
     const path = decodeURIComponent(new URL(request.url, "http://localhost").pathname);

@@ -78,12 +78,6 @@ export function useSharedWorkspace() {
   }, []);
 
   const hasUnsavedChanges = () => Boolean(baseline.current) && JSON.stringify({ minutes: current.current.minutes, parks: parksSeed }) !== baseline.current;
-  const reload = async () => {
-    if (hasUnsavedChanges() && !window.confirm("Há alterações não salvas. Recarregar e descartá-las?")) return;
-    setError("");
-    try { await fetchWorkspace(accessPassword.current); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : "Não foi possível ler a nuvem."); }
-  };
   const unlock = async (password: string) => {
     await fetchWorkspace(password);
     accessPassword.current = password;
@@ -96,5 +90,5 @@ export function useSharedWorkspace() {
     current.current = { minutes: [] };
     setMinutes([]); setRevision(0); setReady(false); setError("");
   };
-  return { minutes, setMinutes, parks: parksSeed, ready, error, saving, revision, configured: Boolean(cloud), publicAccess, reload, unlock, lock };
+  return { minutes, setMinutes, parks: parksSeed, ready, error, saving, revision, configured: Boolean(cloud), publicAccess, unlock, lock };
 }
