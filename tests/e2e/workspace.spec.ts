@@ -21,6 +21,7 @@ test("cria ata, revisa checklist, salva e persiste", async ({ page }) => {
   await page.getByRole("button", { name: "Nova ata", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel(/^Participantes/)).toHaveValue(/Supervisor:/);
+  await dialog.getByLabel(/^Dispatcher/).fill("ATRRO");
   await dialog.getByRole("tab", { name: "Conteúdo", exact: true }).click();
   await dialog.locator(".tiptap").fill("Manutenção preventiva das turbinas 01 a 04. Revisão de materiais concluída.");
   await dialog.getByRole("tab", { name: "Checklist" }).click();
@@ -31,6 +32,31 @@ test("cria ata, revisa checklist, salva e persiste", async ({ page }) => {
   await page.reload();
   await navigate(page, "Atas semanais");
   await expect(page.locator(".count-label")).toContainText("43");
+});
+test("cola imagem com Ctrl+V no conteúdo da ata", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Nova ata", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(/^Dispatcher/).fill("ATRRO");
+  await dialog.getByRole("tab", { name: "Conteúdo", exact: true }).click();
+  await dialog.locator(".tiptap").click();
+  await page.evaluate(async () => {
+    const canvas = document.createElement("canvas"); canvas.width = 40; canvas.height = 20;
+    const context = canvas.getContext("2d")!; context.fillStyle = "#00a3e0"; context.fillRect(0, 0, 40, 20);
+    const blob: Blob = await new Promise(resolve => canvas.toBlob(value => resolve(value!), "image/png"));
+    const transfer = new DataTransfer(); transfer.items.add(new File([blob], "print.png", { type: "image/png" }));
+    document.querySelector(".tiptap")!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }));
+  });
+  await expect(dialog.locator(".tiptap img")).toHaveAttribute("src", /^data:image\/png;base64,/);
+  await dialog.getByRole("tab", { name: "Checklist" }).click();
+  await dialog.getByRole("button", { name: "Marcar todos como revisados" }).click();
+  await dialog.getByRole("button", { name: "Revisar e enviar" }).click();
+  await expect(page.getByRole("dialog", { name: "Pré-visualização do envio" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Baixar PDF/ }).first().click();
+  expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
+  await expect(page.getByRole("status").filter({ hasText: "Não foi possível gerar o PDF." })).toHaveCount(0);
 });
 test("filtra atas e exporta PDF", async ({ page }) => {
   await page.goto("/");

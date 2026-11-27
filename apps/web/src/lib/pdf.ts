@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import { autoTable, type RowInput } from "jspdf-autotable";
-import { checklistLabels, type Minute, type Park } from "./domain";
+import { checklistLabels, hasContent, type Minute, type Park } from "./domain";
 
 const MARGIN = 18;
 const CONTENT_WIDTH = 210 - MARGIN * 2;
@@ -38,6 +38,20 @@ export function buildMinutePdf(minute: Minute, park: Park | undefined) {
     }
     position += 4;
   };
+  const image = (element: Element) => {
+    const source = element.getAttribute("src") ?? "";
+    const format = /^data:image\/(png|jpe?g);base64,/i.exec(source)?.[1];
+    if (!format) return;
+    try {
+      const properties = pdf.getImageProperties(source);
+      const scale = Math.min(1, CONTENT_WIDTH / (properties.width * 0.2646), (BOTTOM_LIMIT - TOP) / (properties.height * 0.2646));
+      const width = properties.width * 0.2646 * scale;
+      const height = properties.height * 0.2646 * scale;
+      newPageIfNeeded(height);
+      pdf.addImage(source, format.toLowerCase() === "png" ? "PNG" : "JPEG", MARGIN, position, width, height);
+      position += height + 4;
+    } catch { text("[Imagem não pôde ser incluída no PDF]", 9); }
+  };
   const renderHtml = (html: string) => {
     const body = new DOMParser().parseFromString(html, "text/html").body;
     for (const node of Array.from(body.childNodes)) {
@@ -47,6 +61,7 @@ export function buildMinutePdf(minute: Minute, park: Park | undefined) {
         continue;
       }
       if (!(node instanceof HTMLElement)) continue;
+      if (node.tagName === "IMG") { image(node); continue; }
       if (node.tagName === "TABLE") {
         const { head, body: rows } = tableRows(node as HTMLTableElement);
         autoTable(pdf, {
@@ -63,6 +78,7 @@ export function buildMinutePdf(minute: Minute, park: Park | undefined) {
       } else {
         const value = (node.textContent ?? "").replace(/\s+/g, " ").trim();
         if (value) text(value, 10, node.tagName === "STRONG" || node.tagName === "B");
+        node.querySelectorAll("img").forEach(image);
       }
     }
   };
@@ -74,7 +90,7 @@ export function buildMinutePdf(minute: Minute, park: Park | undefined) {
   text(`Dispatcher: ${minute.dispatcher} | Versão: ${minute.version}`);
   text("Participantes", 12, true);
   text(minute.participants);
-  minute.sections.filter(section => section.content.replace(/<[^>]*>/g, "").trim() || /<table/i.test(section.content)).forEach(section => {
+  minute.sections.filter(section => hasContent(section.content)).forEach(section => {
     text(section.title, 12, true);
     renderHtml(section.content);
   });

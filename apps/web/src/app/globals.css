@@ -18,3 +18,4 @@
 .rich-content th,.rich-content td{border:1px solid #c9d3de;padding:6px 8px;vertical-align:top;text-align:left;min-width:60px}
 .rich-content th{background:#e8f3fa;font-weight:700}
 .rich-content .tableWrapper{overflow-x:auto}
+.rich-content img{display:block;max-width:100%;height:auto;margin:10px 0;border-radius:4px}.rich-content img.ProseMirror-selectednode{outline:2px solid var(--primary)}

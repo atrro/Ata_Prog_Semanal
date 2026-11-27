@@ -15,7 +15,8 @@ export const weekLabel = (minute: Pick<Minute, "year" | "week">) => `Y${minute.y
 export const minuteSchema = z.object({ parkId: z.string().min(1, "Selecione um parque"), year: z.number().int().min(2000).max(2100), week: z.number().int().min(1).max(53), date: z.string().min(1, "Informe a data"), dispatcher: z.string().trim().max(5, "Máximo de 5 caracteres").refine(value => dispatcherInitials.includes(value.toUpperCase()), "Verifique se suas iniciais estão corretas").transform(value => value.toUpperCase()), participants: z.string().min(3, "Informe os participantes") });
 export type MinuteFields = z.infer<typeof minuteSchema>;
 export const stripHtml = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
-export function canSend(minute: Minute) { return checklistLabels.every(label => minute.checklist.includes(label)) && minute.sections.some(section => stripHtml(section.content).length > 0) && minute.participants.trim().length > 0; }
+export const hasContent = (html: string) => stripHtml(html).length > 0 || /<(img|table)\b/i.test(html);
+export function canSend(minute: Minute) { return checklistLabels.every(label => minute.checklist.includes(label)) && minute.sections.some(section => hasContent(section.content)) && minute.participants.trim().length > 0; }
 export function nextVersion(minute: Minute, actor: string, action: string): Minute {
   const version = minute.version + 1;
   return { ...minute, version, audit: [...minute.audit, { version, actor, date: new Date().toISOString(), action }] };
