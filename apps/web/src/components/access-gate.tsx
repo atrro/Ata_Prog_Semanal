@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole } from "lucide-react";
 import { Button } from "./ui/button";
 import { Workspace } from "./workspace";
 import { useSharedWorkspace } from "@/lib/shared-workspace";
+import { loadLogo } from "@/lib/vestas";
 
 function PasswordForm({ onSubmit }: { onSubmit: (password: string) => Promise<string> }) {
   const [password, setPassword] = useState("");
@@ -33,6 +34,8 @@ function PasswordForm({ onSubmit }: { onSubmit: (password: string) => Promise<st
 
 export function AccessGate() {
   const workspace = useSharedWorkspace();
+  const [logo, setLogo] = useState<string>();
+  useEffect(() => { void loadLogo().then(result => setLogo(result?.data)); }, []);
 
   // Sem nuvem configurada, o modo local abre direto com dados fictícios; a senha só protege o modo Supabase.
   if (!workspace.publicAccess) return <Workspace shared={workspace} />;
@@ -41,13 +44,14 @@ export function AccessGate() {
   return <main className="login-page">
     <div className="login-background" style={{ "--login-image": `url(${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/login-vestas-turbine.jpg)` } as React.CSSProperties} />
     <section className="login-panel" aria-labelledby="private-login-title">
-      <span className="login-icon"><LockKeyhole size={23} /></span>
+      {logo ? <img className="login-logo" src={logo} alt="Vestas" /> : <span className="login-logo-fallback">Vestas</span>}
       <h1 id="private-login-title">Wind Planner</h1>
       <p className="login-subtitle">Atas privadas. Digite a senha de acesso para consultar suas pastas e criar uma nova ata.</p>
       <PasswordForm onSubmit={async password => {
         try { await workspace.unlock(password); return ""; }
         catch (failure) { return failure instanceof Error ? failure.message : "Não foi possível entrar. Tente novamente."; }
       }} />
+      <div className="login-panel-footer"><LockKeyhole size={12} />Acesso restrito à equipe de programação</div>
     </section>
     <footer className="login-footer"><span>One Standard. One Process. One Voice.</span><span>Foto: Mrb-Wind, <a href="https://commons.wikimedia.org/wiki/File:V90-2MW_Pujalt_Wind_Farm_in_Spain_2021.jpg" target="_blank" rel="noreferrer">Wikimedia Commons</a>, CC BY-SA 4.0</span></footer>
   </main>;
