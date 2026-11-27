@@ -2,7 +2,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { useEffect, useRef, useState } from "react";
-import { minutesSeed, parksSeed, type Minute, type Park } from "./domain";
+import { minutesSeed, parksSeed, type Minute } from "./domain";
 import { sharedStateSchema } from "./workspace-schema";
 export { sharedStateSchema } from "./workspace-schema";
 
@@ -13,28 +13,23 @@ const cloud = cloudUrl && cloudKey ? createClient(cloudUrl, cloudKey) : null;
 
 export function useSharedWorkspace() {
   const [minutes, setMinutes] = useState<Minute[]>(publicAccess ? [] : minutesSeed);
-  const [parks, setParks] = useState<Park[]>(publicAccess ? [] : parksSeed);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [revision, setRevision] = useState(0);
   const baseline = useRef("");
   const inFlight = useRef(false);
-  const current = useRef({ minutes, parks });
+  const current = useRef({ minutes });
   const accessPassword = useRef("");
-  current.current = { minutes, parks };
-
-  const hasUnsavedChanges = () => Boolean(baseline.current) && JSON.stringify(current.current) !== baseline.current;
-
+  current.current = { minutes };
   const fetchWorkspace = async (password: string) => {
     if (!cloud) throw new Error("Armazenamento em nuvem ainda não configurado. Nenhum dado compartilhado está disponível.");
     const result = await cloud.rpc("wp_load_workspace", { access_password: password });
     if (result.error) throw new Error(result.error.code === "42501" ? "Senha incorreta. Tente novamente." : "Não foi possível ler a nuvem. Verifique a conexão e a configuração do Supabase.");
     const parsed = sharedStateSchema.safeParse(result.data.data);
     if (!parsed.success) throw new Error("Os dados da nuvem não têm o formato esperado. Contate o responsável.");
-    baseline.current = JSON.stringify(parsed.data);
+    baseline.current = JSON.stringify({ minutes: parsed.data.minutes, parks: parksSeed });
     setMinutes(parsed.data.minutes);
-    setParks(parsed.data.parks);
     setRevision(result.data.revision);
     setReady(true);
   };
@@ -43,7 +38,7 @@ export function useSharedWorkspace() {
     if (!publicAccess) {
       try {
         const saved = localStorage.getItem("wind-planner-v1");
-        if (saved) { const parsed = sharedStateSchema.safeParse(JSON.parse(saved)); if (parsed.success) { setMinutes(parsed.data.minutes); setParks(parsed.data.parks); } }
+        if (saved) { const parsed = sharedStateSchema.safeParse(JSON.parse(saved)); if (parsed.success) { setMinutes(parsed.data.minutes); } }
       } catch { setError("Não foi possível restaurar os dados locais."); }
       setReady(true);
       return;
@@ -54,12 +49,12 @@ export function useSharedWorkspace() {
   useEffect(() => {
     if (!ready) return;
     if (!publicAccess) {
-      try { const saved = JSON.parse(localStorage.getItem("wind-planner-v1") ?? "{}"); localStorage.setItem("wind-planner-v1", JSON.stringify({ ...saved, minutes, parks })); }
+      try { const saved = JSON.parse(localStorage.getItem("wind-planner-v1") ?? "{}"); localStorage.setItem("wind-planner-v1", JSON.stringify({ ...saved, minutes })); }
       catch { setError("Armazenamento local cheio. Exporte seus dados e reduza os anexos."); }
       return;
     }
     if (!cloud || error || saving || inFlight.current) return;
-    const payload = JSON.stringify({ minutes, parks });
+    const payload = JSON.stringify({ minutes, parks: parksSeed });
     if (payload === baseline.current) return;
     const timeout = setTimeout(async () => {
       inFlight.current = true;
@@ -73,7 +68,7 @@ export function useSharedWorkspace() {
       finally { inFlight.current = false; setSaving(false); }
     }, 500);
     return () => clearTimeout(timeout);
-  }, [minutes, parks, ready, error, saving, revision]);
+  }, [minutes, ready, error, saving, revision]);
 
   useEffect(() => {
     if (!publicAccess) return;
@@ -82,23 +77,10 @@ export function useSharedWorkspace() {
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, []);
 
-  const reload = async () => {
-    if (hasUnsavedChanges() && !window.confirm("Há alterações não salvas. Recarregar e descartá-las?")) return;
-    setError("");
-    try { await fetchWorkspace(accessPassword.current); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : "Não foi possível ler a nuvem."); }
-  };
   const unlock = async (password: string) => {
     await fetchWorkspace(password);
     accessPassword.current = password;
     setError("");
   };
-  const lock = () => {
-    if (hasUnsavedChanges()) throw new Error("Existem alterações não publicadas. Salve ou exporte antes de sair.");
-    accessPassword.current = "";
-    baseline.current = "";
-    current.current = { minutes: [], parks: [] };
-    setMinutes([]); setParks([]); setRevision(0); setReady(false); setError("");
-  };
-  return { minutes, setMinutes, parks, setParks, ready, error, saving, revision, configured: Boolean(cloud), publicAccess, reload, unlock, lock };
+  return { minutes, setMinutes, parks: parksSeed, ready, error, saving, revision, configured: Boolean(cloud), publicAccess, unlock };
 }

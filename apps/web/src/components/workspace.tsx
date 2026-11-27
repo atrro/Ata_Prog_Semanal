@@ -5,19 +5,18 @@ import { AnimatePresence, motion } from "framer-motion";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Activity, ArrowDown, ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, Copy, Download, Ellipsis, ExternalLink, FileCheck2, FileClock, FilePlus2, FileText, Filter, Globe2, LayoutDashboard, Link2, ListFilter, Loader2, Mail, Menu, MessageSquare, Moon, Paperclip, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Sun, Trash2, TrendingUp, Upload, Users, Wind, X, Zap } from "lucide-react";
+import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ArrowDown, ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, Copy, Download, Ellipsis, ExternalLink, FileCheck2, FileClock, FilePlus2, FileText, Filter, Globe2, LayoutDashboard, Link2, ListFilter, Loader2, Mail, Menu, MessageSquare, Moon, Paperclip, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Sun, Trash2, TrendingUp, Upload, Users, Wind, X, Zap } from "lucide-react";
 import { Button } from "./ui/button";
 import { RichEditor } from "./rich-editor";
-import { canSend, checklistLabels, defaultParticipants, minuteSchema, minutesSeed, nextVersion, parksSeed, people, safeUrl, sectionLabels, stripHtml, type Attachment, type Minute, type MinuteFields, type Park, type Role, type Status } from "@/lib/domain";
+import { canSend, checklistLabels, defaultNewMinuteYear, defaultParticipants, dispatcherInitials, minuteSchema, minutesSeed, nextVersion, parksSeed, people, safeUrl, sectionLabels, stripHtml, weekLabel, type Attachment, type Minute, type MinuteFields, type Park, type Role, type Status } from "@/lib/domain";
 import { exportPdf, minutePdfFileName } from "@/lib/pdf";
 import { openOutlookDraft } from "@/lib/outlook";
 import type { useSharedWorkspace } from "@/lib/shared-workspace";
-import { CloudAccess } from "./cloud-access";
 
-type View = "dashboard" | "minutes" | "parks" | "team" | "reports" | "integrations" | "settings";
-const names: Record<View, string> = { dashboard: "Visão geral", minutes: "Atas semanais", parks: "Parques eólicos", team: "Equipe", reports: "Relatórios", integrations: "Integrações", settings: "Configurações" };
-const navItems = [{ id: "dashboard" as View, icon: LayoutDashboard }, { id: "minutes" as View, icon: FileText }, { id: "parks" as View, icon: Wind }, { id: "team" as View, icon: Users }, { id: "reports" as View, icon: Activity }];
+type View = "dashboard" | "minutes" | "parks" | "team" | "integrations" | "settings";
+const names: Record<View, string> = { dashboard: "Visão geral", minutes: "Atas semanais", parks: "Parques eólicos", team: "Equipe", integrations: "Integrações", settings: "Configurações" };
+const navItems = [{ id: "dashboard" as View, icon: LayoutDashboard }, { id: "minutes" as View, icon: FileText }, { id: "parks" as View, icon: Wind }, { id: "team" as View, icon: Users }];
 const formatDate = (date: string) => new Date(date.length === 10 ? `${date}T12:00:00` : date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(" de ", " ").replace(".", "");
 const shortPark = (name: string) => name.replace("Complexo Eólico ", "").replace("Parque Eólico ", "");
 
@@ -31,13 +30,12 @@ function Avatar({ name, small = false }: { name: string; small?: boolean }) {
 function Badge({ status }: { status: Status }) { return <span className={`badge ${status === "Enviada" ? "badge-green" : status === "Pendente" ? "badge-amber" : "badge-gray"}`}><span />{status}</span>; }
 
 export function Workspace({ shared }: { shared: ReturnType<typeof useSharedWorkspace> }) {
-  const { minutes, setMinutes, parks, setParks, publicAccess } = shared;
+  const { minutes, setMinutes, parks, publicAccess, error } = shared;
   const [view, setView] = useState<View>("dashboard");
   const [ready, setReady] = useState(false);
   const [dark, setDark] = useState(false);
   const [sidebar, setSidebar] = useState(false);
   const [query, setQuery] = useState("");
-  const [region, setRegion] = useState("all");
   const [period, setPeriod] = useState("month");
   const [parkFilter, setParkFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -52,8 +50,9 @@ export function Workspace({ shared }: { shared: ReturnType<typeof useSharedWorks
   const [emailMinute, setEmailMinute] = useState<Minute | null>(null);
   const [recipients, setRecipients] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [parkEditor, setParkEditor] = useState<Park | "new" | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ kind: "minute" | "park"; id: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string } | null>(null);
+  const [chooser, setChooser] = useState(false);
+  const [templateMinute, setTemplateMinute] = useState<Minute | null>(null);
   const [notification, setNotification] = useState(false);
   const [toast, setToast] = useState("");
   const [demoRole, setRole] = useState<Role>("Administrador");
@@ -69,18 +68,19 @@ export function Workspace({ shared }: { shared: ReturnType<typeof useSharedWorks
     setReady(true);
   }, []);
   useEffect(() => { if (ready) { document.documentElement.classList.toggle("dark", dark); try { const saved = JSON.parse(localStorage.getItem("wind-planner-v1") ?? "{}"); localStorage.setItem("wind-planner-v1", JSON.stringify({ ...saved, dark })); } catch { setToast("Não foi possível salvar o tema."); } } }, [dark, ready]);
-  useEffect(() => { setPage(0); }, [query, region, parkFilter, statusFilter, dispatcherFilter, weekFilter, dateFrom, dateTo, period]);
+  useEffect(() => { setPage(0); }, [query, parkFilter, statusFilter, dispatcherFilter, weekFilter, dateFrom, dateTo, period]);
   const navigate = (next: View) => { setView(next); setSidebar(false); setQuery(""); setPage(0); };
   const editable = role !== "Leitor";
   const scoped = minutes.filter(minute => {
     const park = parks.find(item => item.id === minute.parkId);
     const text = `${park?.name} ${minute.dispatcher} ${minute.week}`.toLocaleLowerCase("pt-BR");
-    return (!query || text.includes(query.toLocaleLowerCase("pt-BR"))) && (region === "all" || park?.region === region) && (period !== "week" || minute.week === 44) && (period !== "last" || minute.week === 43) && (parkFilter === "all" || minute.parkId === parkFilter) && (statusFilter === "all" || minute.status === statusFilter) && (dispatcherFilter === "all" || minute.dispatcher === dispatcherFilter) && (!weekFilter || minute.week === Number(weekFilter)) && (!dateFrom || minute.date >= dateFrom) && (!dateTo || minute.date <= dateTo);
+    return (!query || text.includes(query.toLocaleLowerCase("pt-BR"))) && (period !== "week" || minute.week === 44) && (period !== "last" || minute.week === 43) && (parkFilter === "all" || minute.parkId === parkFilter) && (statusFilter === "all" || minute.status === statusFilter) && (dispatcherFilter === "all" || minute.dispatcher === dispatcherFilter) && (!weekFilter || minute.week === Number(weekFilter)) && (!dateFrom || minute.date >= dateFrom) && (!dateTo || minute.date <= dateTo);
   });
   const sent = scoped.filter(minute => minute.status === "Enviada").length;
   const pending = scoped.filter(minute => minute.status === "Pendente").length;
   const drafts = scoped.filter(minute => minute.status === "Rascunho").length;
-  const openNew = () => { setViewOnly(false); setEditor("new"); };
+  const openNew = () => { setViewOnly(false); setTemplateMinute(null); setChooser(true); };
+  const startNew = (template: Minute | null) => { setChooser(false); setViewOnly(false); setTemplateMinute(template); setEditor("new"); };
   const saveMinute = (minute: Minute) => { setMinutes(previous => previous.some(item => item.id === minute.id) ? previous.map(item => item.id === minute.id ? minute : item) : [minute, ...previous]); setEditor(null); notify(publicAccess ? "Alteração registrada. Aguarde a confirmação de salvamento no painel da nuvem." : "Ata salva. Histórico de versão atualizado."); };
   const duplicate = (minute: Minute) => { const copy: Minute = { ...minute, id: crypto.randomUUID(), status: "Rascunho", version: 1, date: new Date().toISOString().slice(0, 10), sentAt: undefined, audit: [{ version: 1, actor, date: new Date().toISOString(), action: `Duplicada de ${minute.id}` }] }; setMinutes(previous => [copy, ...previous]); setViewOnly(false); setEditor(copy); };
   const requestEmail = (minute: Minute) => { if (!canSend(minute)) { notify("Complete os 13 itens do checklist, os participantes e o conteúdo antes de enviar."); setViewOnly(false); setEditor(minute); return; } setRecipients(""); setEmailError(""); setEmailMinute(minute); };
@@ -93,7 +93,7 @@ export function Workspace({ shared }: { shared: ReturnType<typeof useSharedWorks
     const emails = validRecipients();
     if (!emailMinute || !emails) return;
     const park = parks.find(item => item.id === emailMinute.parkId);
-    const subject = `ATA DE PROGRAMAÇÃO SEMANAL - ${park?.name} - SEMANA ${emailMinute.week}`;
+    const subject = `ATA DE PROGRAMAÇÃO SEMANAL - ${park?.name} - ${weekLabel(emailMinute)}`;
     const body = `Prezados,\n\nSegue a ata da programação semanal do parque ${park?.name}.\n\nFavor verificar os pontos destacados e as ações pendentes.\n\nAtenciosamente,\n${emailMinute.dispatcher}`;
     try {
       const result = await openOutlookDraft({ minute: emailMinute, park, to: emails, subject, body });
